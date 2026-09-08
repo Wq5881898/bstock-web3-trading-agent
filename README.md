@@ -114,6 +114,11 @@ bstock-history --symbol NVDAB --days 3
 bstock-backtest --data kline_history\bstock\NVDAB\<window>\klines_1m.parquet
 ```
 
+完整的安装、模拟盘、MCP、Wallet 和故障排查步骤见
+[用户搭建与使用指南](docs/USER_GUIDE.md)。<br>
+See the [setup and user guide](docs/USER_GUIDE.md) for installation, paper mode, MCP,
+Wallet and troubleshooting.
+
 短视频和评审演示步骤见 [演示指南](docs/DEMO.md)。<br>
 See the [demo guide](docs/DEMO.md) for a concise judging and video flow.
 
