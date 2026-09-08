@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bstock-web3-engine"
-version = "1.0.2"
-description = "Standalone Binance bStock market-data, replay and guarded Agentic Wallet execution engine"
+version = "1.1.0"
+description = "Binance bStock strategy agent with Agent OS MCP and Agentic Wallet execution bridges"
 requires-python = ">=3.11"
 dependencies = [
   "requests>=2.31",
@@ -22,6 +22,7 @@ bstock-engine = "bstock_web3.cli:main"
 bstock-history = "bstock_web3.history:main"
 bstock-backtest = "bstock_web3.backtest:main"
 bstock-desktop = "bstock_web3.desktop:main"
+bstock-mcp-plan = "bstock_web3.mcp_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

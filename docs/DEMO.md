@@ -40,7 +40,18 @@ bstock-backtest --data <generated-klines_1m.parquet>
 The history builder resumes partial downloads, creates 1m and 5m bars, records completeness
 and writes SHA-256 hashes in its manifest.
 
-## 5. Explain the guarded execution path
+## 5. Show the Agent OS MCP path
+
+```powershell
+bstock-mcp-plan --symbol NVDAB --amount 20
+```
+
+The plan targets `NVDABUSDT` Spot in the OAuth-selected Agentic sub-account. It contains
+no credentials and cannot execute itself. Show the host-side read-only account, market,
+commission and balance checks, then the one-time confirmation gate. See
+[AGENT_OS_MCP.md](AGENT_OS_MCP.md).
+
+## 6. Explain the guarded Agentic Wallet path
 
 For judging, show the command help or code path without confirming a real transaction:
 

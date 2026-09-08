@@ -1,4 +1,4 @@
-"""Standalone Binance bStock Web3 engine."""
+"""Binance bStock strategy agent with MCP and Agentic Wallet bridges."""
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
