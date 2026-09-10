@@ -92,7 +92,9 @@ class MedianMonitor:
             # Bound work per cycle; full pages are catch-up/warmup only.
             for _ in range(3):
                 cursor = self.session.stream.next_id
-                limit = 200 if cursor is None else 1000
+                # Median needs only a small rolling window; fixed Range strategies
+                # need more trades to reconstruct enough completed price bars.
+                limit = 200 if cursor is None and self.config.strategy_kind == "median" else 1000
                 rows = self.trades.fetch(self.asset.spot_symbol, from_id=cursor, limit=limit)
                 now_ms = int(self.clock() * 1000)
                 fills.extend(self.session.accept_page(rows, now_ms=now_ms,

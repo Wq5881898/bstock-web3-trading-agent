@@ -141,6 +141,7 @@ def test_range_monitor_warmup_buy_restart_and_sell(tmp_path):
     worker = reopen()
     trades.rows = [row(0, 100), row(1, 101), row(2, 102.01), row(3, 103.0301)]
     assert not worker.evaluate_once().fills
+    assert trades.calls[-1] == {"from_id": None, "limit": 1000}
     trades.rows = [row(4, 104.060401)]
     assert worker.evaluate_once().fills[0]["side"] == "buy"
     worker.close()

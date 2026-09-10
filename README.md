@@ -87,6 +87,8 @@ market snapshot and do not trigger additional wallet calls or orders.
   These are offline/accelerated checks, not sustained real-market or real-account acceptance.
 - Median已接公共NVDAB逐笔行情和桌面；两轮读取成功，但数据不新鲜，因此未触发模拟成交。见[Median桌面说明](docs/MEDIAN_DESKTOP.md)。<br>
   Median public NVDAB feed and desktop are connected; two reads succeeded but stale ticks produced no paper fills. See [Median desktop notes](docs/MEDIAN_DESKTOP.md).
+- Range EMA/Median已接公共NVDAB逐笔行情；1000笔预热形成2根20 bps Range bar，因未达到策略预热数量而保持0成交。<br>
+  Range EMA/Median read public NVDAB trades successfully; 1,000 warmup trades formed two 20-bps bars, so the strategies correctly remained unready with zero fills.
 - **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Slope/Auto迁移、
   独立OAuth Token交换/安全存储、MCP账户核对及无人值守执行验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
@@ -164,6 +166,13 @@ Local synthetic desktop acceptance (no account connection; output stays in git-i
 
 ```powershell
 .venv\Scripts\python scripts/local_desktop_acceptance.py
+```
+
+固定Range公共行情模拟冒烟（无账户、无真实订单）：<br>
+Fixed-Range public-feed paper smoke (no account and no real orders):
+
+```powershell
+.venv\Scripts\python scripts\tick_public_smoke.py --strategy range-ema --symbol NVDAB --evaluations 2
 ```
 
 ### 生成 Agent OS MCP 订单计划 / Create an Agent OS MCP Plan
