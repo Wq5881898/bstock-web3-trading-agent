@@ -74,6 +74,7 @@ class RangeObservation:
     reason: str
     generation: int
     closed_count: int
+    strategy_params: dict | None = None
 
 
 class RangeTickStream:
@@ -144,7 +145,7 @@ class RangeTickStream:
         self.tick_count += 1
         return completed
 
-    def accept_page(self, rows, *, now_ms: int, warmup=False):
+    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
         if type(now_ms) is not int or now_ms < 0 or type(warmup) is not bool or not isinstance(rows, list) or len(rows) > 1000:
             self.recovery_required = True
             raise ValueError("Invalid Range page request")

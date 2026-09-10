@@ -8,6 +8,7 @@ from .catalog import BStockCatalogClient
 from .market_data import BStockMultiTimeframeFeed
 from .median_paper import MedianPaperSession, RangePaperSession
 from .strategy import SignalDecision
+from .range_guard import GuardedRangeMedianConfig, minute_guard_context
 
 
 @dataclass(frozen=True)
@@ -65,9 +66,10 @@ class MedianMonitor:
             if self.config.strategy_kind == "median":
                 self.session = MedianPaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
                     strategy=self.config.median_config, risk=self.config)
-            elif self.config.strategy_kind in ("range-ema", "range-median"):
+            elif self.config.strategy_kind in ("range-ema", "range-median", "range-median-guarded"):
                 self.session = RangePaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
-                    strategy=self.config.range_config, risk=self.config)
+                    strategy=(self.config.guarded_range_config if self.config.strategy_kind == "range-median-guarded"
+                              else self.config.range_config), risk=self.config)
             else:
                 raise ValueError("Unsupported tick strategy")
             if self.session.stream.recovery_required:
@@ -88,6 +90,14 @@ class MedianMonitor:
             return self._event(SignalDecision("hold", "market_unavailable", None, None), ())
         fills = []
         caught_up = False
+        context = None
+        if self.config.strategy_kind == "range-median-guarded":
+            try:
+                self._snapshot = self.candles.fetch(self.asset)
+                self._last_chart = self.clock()
+                context = minute_guard_context(self._snapshot)
+            except Exception:
+                context = {}
         try:
             # Bound work per cycle; full pages are catch-up/warmup only.
             for _ in range(3):
@@ -98,7 +108,7 @@ class MedianMonitor:
                 rows = self.trades.fetch(self.asset.spot_symbol, from_id=cursor, limit=limit)
                 now_ms = int(self.clock() * 1000)
                 fills.extend(self.session.accept_page(rows, now_ms=now_ms,
-                             warmup=cursor is None or len(rows) == limit))
+                             warmup=cursor is None or len(rows) == limit, context=context))
                 if cursor is None:
                     break
                 if len(rows) < limit:

@@ -16,7 +16,7 @@ def test_roundtrip_and_isolation(tmp_path):
 
 
 @pytest.mark.parametrize("changes", [
-    {"version": True}, {"version": 5}, {"mode": "live-confirmed"},
+    {"version": True}, {"version": 6}, {"mode": "live-confirmed"},
     {"symbol": "../BTC"}, {"symbol": None}, {"order_size_usdc": "NaN"},
     {"order_size_usdc": "Infinity"}, {"order_size_usdc": "1.001"},
     {"paper_daily_loss_limit": True}, {"paper_daily_loss_limit": "0"},

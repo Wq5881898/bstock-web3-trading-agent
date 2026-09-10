@@ -15,6 +15,7 @@ from .market_data import BStockMultiTimeframeFeed, MultiTimeframeSnapshot
 from .strategy import MtfEmaConfig, MtfEmaStrategy, PositionView, SignalDecision
 from .median_ticks import TickMedianConfig
 from .range_ticks import RangeStrategyConfig
+from .range_guard import GuardedRangeMedianConfig
 from .wallet import AgenticWalletCli, USDC_BSC, WalletOrderResult, WalletQuote
 
 
@@ -71,9 +72,10 @@ class BStockEngineConfig:
     strategy_kind: str = "mtf"
     median_config: TickMedianConfig = field(default_factory=TickMedianConfig)
     range_config: RangeStrategyConfig = field(default_factory=RangeStrategyConfig)
+    guarded_range_config: GuardedRangeMedianConfig = field(default_factory=GuardedRangeMedianConfig)
 
     def __post_init__(self) -> None:
-        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig):
+        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median", "range-median-guarded") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig) or not isinstance(self.guarded_range_config, GuardedRangeMedianConfig):
             raise ValueError("Invalid strategy selection")
         if self.strategy_kind != "mtf" and self.mode != "paper":
             raise ValueError("Tick/Range strategies are paper-only")

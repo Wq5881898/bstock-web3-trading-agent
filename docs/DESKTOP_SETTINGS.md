@@ -1,10 +1,10 @@
 # 桌面参数保存 / Desktop preferences
 
-最新格式 / Latest schema: v4同时保存MTF/Median/Range选择与参数，兼容读取完整v1/v2/v3文件；见[Median桌面说明](MEDIAN_DESKTOP.md)与[固定Range策略](RANGE_DESKTOP.md)。 / v4 persists MTF/Median/Range selection and inputs and reads exact v1/v2/v3 files; see [Median desktop](MEDIAN_DESKTOP.md) and [fixed Range strategies](RANGE_DESKTOP.md).
+最新格式 / Latest schema: v5同时保存MTF/Median/Range及防御参数，兼容读取完整v1至v4文件；见[Median桌面说明](MEDIAN_DESKTOP.md)与[Range策略](RANGE_DESKTOP.md)。 / v5 persists MTF/Median/Range and guarded inputs and reads exact v1–v4 files; see [Median desktop](MEDIAN_DESKTOP.md) and [Range strategies](RANGE_DESKTOP.md).
 
 后续更新 / Follow-up: v2现在包含可编辑的MTF EMA参数，并兼容读取完整v1预设；见[策略编辑说明](STRATEGY_INTEGRATION.md)。下文为初次参数保存阶段记录。 / v2 now includes editable MTF EMA parameters and reads exact v1 presets compatibly; see [Strategy editing](STRATEGY_INTEGRATION.md). The initial phase record follows.
 
-最新验证 / Latest validation: **256 tests passed (46.58s)**. Native synthetic desktop acceptance: **650 attempts, 38 injected failures, 13.36s**, passed. Local report: `runtime/desktop-acceptance/1789070913827878300/report.json`. This accelerated fixture is not a long-duration real-market test. 验证未授权账户或下真实订单 / Validation did not authorize an account or place real orders.
+最新验证 / Latest validation: **259 tests passed (43.90s)**. Native synthetic desktop acceptance: **650 attempts, 38 injected failures, 12.76s**, passed. Local report: `runtime/desktop-acceptance/1789075652264736100/report.json`. This accelerated fixture is not a long-duration real-market test. 验证未授权账户或下真实订单 / Validation did not authorize an account or place real orders.
 
 桌面提供“保存参数”和“读取已保存参数”。修改后需要点击保存；启动、停止或关闭窗口不会隐式覆盖文件。再次打开应用时读取已保存参数，但始终停止，必须人工点击启动。当前保存一组参数，不是多策略预设管理器；策略仍为现有MTF EMA。
 

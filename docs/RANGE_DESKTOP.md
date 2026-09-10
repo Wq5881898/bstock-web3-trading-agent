@@ -2,9 +2,9 @@
 
 ## 当前范围 / Scope
 
-桌面策略页现已提供 **Range EMA** 与 **Range Median**。两者都仅支持`paper`，消费Binance公共`aggTrades`逐笔成交，并按价格移动幅度生成Range bar；不会用分钟K线冒充Range bar，也不会访问账户、MCP或发送真实订单。本轮明确不加入Slope、自适应Range或后台自动选参。
+桌面策略页现已提供 **Range EMA**、**Range Median** 与 **Range Median EMA/P90防御**。它们都仅支持`paper`，消费Binance公共`aggTrades`逐笔成交，并按价格移动幅度生成Range bar；不会用分钟K线冒充Range bar，也不会访问账户、MCP或发送真实订单。Slope仍不加入；Range Auto和Median Adaptive正在按alpha2原语义迁移。
 
-The Strategies tab now offers **Range EMA** and **Range Median**. Both are paper-only and build price-movement bars from Binance public `aggTrades`. Minute candles are never substituted for Range bars, and these modes do not access an account, MCP or real orders. Slope, adaptive Range and background parameter selection are explicitly outside this iteration.
+The Strategies tab now offers **Range EMA**, **Range Median** and **Range Median EMA/P90 Guarded**. All are paper-only and build price-movement bars from Binance public `aggTrades`. Minute candles are never substituted for Range bars, and these modes do not access an account, MCP or real orders. Slope remains excluded; Range Auto and Median Adaptive are being migrated with alpha2 semantics.
 
 ## Range bar语义 / Range-bar semantics
 
@@ -23,6 +23,12 @@ Every page requires contiguous aggregate-trade IDs and nondecreasing timestamps.
 
 - **Range EMA:** defaults to 20 bps, EMA 15/45 and zero entry/exit thresholds. It warms through 45 completed Range bars and evaluates only a newly completed generation. BUY requires fast above slow × (1 + entry threshold); SELL requires fast at or below slow × (1 − exit threshold).
 - **Range Median:** defaults to 20 bps, window 20 and deviation 0.003. Windows are 5, 10, 20, 30, 40 or 60, using completed Range-bar closes only. BUY is below median × (1 − deviation); SELL is above median × (1 + deviation).
+
+## 高振幅防御 / High-amplitude guarded Median
+
+防御候选保持alpha2推荐默认：Range20、Median60、偏离0.2%，完成分钟EMA20/50入场守护，`clamp(P90振幅×3, 1%, 5%)`动态止损，并在买入时锁定。EMA20与EMA50连续下行时只封锁新买入；持仓仍保留原Median卖出。价格达到锁定止损后，仅在当前分钟EMA20低于EMA50时退出；止损后冷却900秒。可选的方向回撤门控、confirmed-down模式及更宽灾难止损也保留在配置模型中，但不是默认开启项。
+
+The guarded candidate keeps alpha2's recommended defaults: Range20, Median60, 0.2% deviation, completed-minute EMA20/50 entry protection and a buy-time-locked `clamp(P90 amplitude × 3, 1%, 5%)` stop. Consecutively falling EMA20/50 blocks new entries only; held positions retain the original Median exit. The locked stop exits only while current EMA20 is below EMA50, followed by a 900-second cooldown. Optional directional-drawdown gates, confirmed-down mode and a wider catastrophe stop remain available in the configuration model but are disabled by default.
 
 一次跳价完成多根bar时，只对最终代次评估一次，重启不会重放已消费信号。Range EMA、Range Median和逐笔Median各自使用独立SQLite文件和1000单位模拟本金；风险上限不在这些账本之间合并，因此它们不是账户级总风险控制。
 
@@ -46,7 +52,7 @@ Automated coverage includes exact multi-bar jumps, volume ownership, EMA/Median 
 
 本轮证据：Python 3.11完整回归256项通过（46.58秒）；原生桌面650轮刷新、38次故障注入通过（13.36秒）。Range EMA/Median页面截图位于被Git忽略的`runtime/desktop-acceptance/1789070913827878300/`。这些数字是本地加速模拟，不是实盘验收。
 
-This iteration passed 256 Python 3.11 tests in 46.58 seconds and a native-desktop run of 650 refreshes with 38 injected failures in 13.36 seconds. Range EMA/Median screenshots are under git-ignored `runtime/desktop-acceptance/1789070913827878300/`. These are accelerated local simulations, not live acceptance.
+Latest validation passed 259 Python 3.11 tests in 43.90 seconds and a native-desktop run of 650 refreshes with 38 injected failures in 12.76 seconds. Range and guarded screenshots are under git-ignored `runtime/desktop-acceptance/1789075652264736100/`. These are accelerated local simulations, not live acceptance.
 
 2026-09-10公共行情复测：Range EMA与Range Median都成功读取NVDAB最新逐笔成交，游标前进、市场状态正常、K线页各返回239根。1000笔初始预热仅形成2根20 bps Range bar，未达到EMA的45根或Median的20根要求，因此0笔模拟成交；这是正常预热，不是放宽门槛的理由。报告位于`runtime/tick-public-smoke/range-ema-1789074677580056400/`和`range-median-1789074690040502200/`。
 

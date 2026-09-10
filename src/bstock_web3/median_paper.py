@@ -1,7 +1,7 @@
 """Transactional Median paper ledger. No market HTTP, wallets or live orders."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import json
@@ -26,13 +26,18 @@ class MedianLedger:
     entries: int = 0
     losses: int = 0
     last_entry_ms: int | None = None
+    entry_price: str = "0"
+    entry_strategy_params: dict = field(default_factory=dict)
+    last_sell_ms: int | None = None
+    last_sell_reason: str = ""
+    stop_loss_cooldown_seconds: int = 0
 
     @classmethod
     def restore(cls, data):
         if not isinstance(data, dict) or set(data) != set(asdict(cls())):
             raise ValueError("Invalid Median ledger fields")
         result = cls(**data)
-        for key in ("cash", "quantity", "entry_cost", "realized_pnl", "fees", "baseline", "last_equity"):
+        for key in ("cash", "quantity", "entry_cost", "entry_price", "realized_pnl", "fees", "baseline", "last_equity"):
             raw = getattr(result, key)
             if raw is None and key in ("baseline", "last_equity"):
                 continue
@@ -46,6 +51,8 @@ class MedianLedger:
                 raise ValueError("Invalid Median ledger amount")
         if (Decimal(result.quantity) > 0) != (Decimal(result.entry_cost) > 0):
             raise ValueError("Incomplete Median position")
+        if (Decimal(result.quantity) > 0) != (Decimal(result.entry_price) > 0):
+            raise ValueError("Incomplete entry price")
         # Permit only Decimal rounding dust, not unexplained deposits/withdrawals.
         if abs(Decimal(result.cash) + Decimal(result.entry_cost) - Decimal("1000") - Decimal(result.realized_pnl)) > Decimal("1e-18"):
             raise ValueError("Median cash/cost/PnL do not reconcile")
@@ -53,6 +60,12 @@ class MedianLedger:
             raise ValueError("Invalid Median risk counters")
         if result.last_entry_ms is not None and (type(result.last_entry_ms) is not int or result.last_entry_ms < 0):
             raise ValueError("Invalid entry timestamp")
+        if result.last_sell_ms is not None and (type(result.last_sell_ms) is not int or result.last_sell_ms < 0):
+            raise ValueError("Invalid sell timestamp")
+        if not isinstance(result.entry_strategy_params, dict) or len(json.dumps(result.entry_strategy_params, allow_nan=False)) > 4096:
+            raise ValueError("Invalid entry strategy parameters")
+        if result.last_sell_reason not in ("", "strategy", "stop_loss", "catastrophe_stop") or type(result.stop_loss_cooldown_seconds) is not int or not 0 <= result.stop_loss_cooldown_seconds <= 100000:
+            raise ValueError("Invalid exit cooldown metadata")
         if not isinstance(result.day, str) or bool(result.day) != (result.baseline is not None):
             raise ValueError("Incomplete Median daily baseline")
         if result.day:
@@ -105,8 +118,16 @@ class TickPaperSession:
             if len(raw) > 131072:
                 raise ValueError("Median session payload too large")
             payload = json.loads(raw, object_pairs_hook=unique_pairs)
-            if not isinstance(payload, dict) or set(payload) != {"version", "identity", "ledger", "stream"} or type(payload["version"]) is not int or payload["version"] != 1 or payload["identity"] != self.identity:
+            if not isinstance(payload, dict) or set(payload) != {"version", "identity", "ledger", "stream"} or type(payload["version"]) is not int or payload["version"] not in (1, 2) or payload["identity"] != self.identity:
                 raise ValueError("Median session configuration mismatch; restore original settings")
+            if payload["version"] == 1:
+                old = payload["ledger"]
+                if not isinstance(old, dict) or set(old) != set(asdict(MedianLedger())) - {"entry_price", "entry_strategy_params", "last_sell_ms", "last_sell_reason", "stop_loss_cooldown_seconds"}:
+                    raise ValueError("Invalid legacy Median ledger")
+                quantity = Decimal(old["quantity"])
+                entry_price = "0" if quantity == 0 else str(Decimal(old["entry_cost"]) / quantity)
+                payload["ledger"] = {**old, "entry_price": entry_price, "entry_strategy_params": {},
+                    "last_sell_ms": None, "last_sell_reason": "", "stop_loss_cooldown_seconds": 0}
             self.ledger = MedianLedger.restore(payload["ledger"])
             self.stream = self.stream_type.restore(payload["stream"], symbol=symbol, config=self.strategy)
             if self.stream.recovery_required and not self.ledger.pause:
@@ -121,7 +142,7 @@ class TickPaperSession:
         self.db.close()
 
     def _encode(self, ledger, stream):
-        return json.dumps({"version": 1, "identity": self.identity,
+        return json.dumps({"version": 2, "identity": self.identity,
                            "ledger": asdict(ledger), "stream": stream.checkpoint()}, allow_nan=False)
 
     def _copy(self):
@@ -162,10 +183,10 @@ class TickPaperSession:
             ledger.pause = ledger.pause or "CONSECUTIVE_LOSSES"
         ledger.last_equity = str(equity)
 
-    def accept_page(self, rows, *, now_ms: int, warmup=False):
+    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
         ledger, stream = self._copy()
         try:
-            observations = stream.accept_page(rows, now_ms=now_ms, warmup=warmup)
+            observations = stream.accept_page(rows, now_ms=now_ms, warmup=warmup, context=context)
         except ValueError:
             ledger.pause = ledger.pause or "DATA_GAP"
             self._commit(ledger, stream)  # persist the latch, but not an invalid page prefix
@@ -178,17 +199,38 @@ class TickPaperSession:
             self._risk_check(ledger, price, tick.time_ms)
             quantity = Decimal(ledger.quantity)
             side = ""
-            if quantity > 0 and point.sell:
+            exit_reason = "strategy"
+            if quantity > 0:
+                params = ledger.entry_strategy_params
+                drawdown = Decimal("1") - price / Decimal(ledger.entry_price)
+                catastrophe = params.get("locked_catastrophe_stop_loss")
+                dynamic = params.get("locked_stop_loss")
+                live = getattr(point, "strategy_params", None) or {}
+                if catastrophe is not None and drawdown >= Decimal(str(catastrophe)):
+                    exit_reason = "catastrophe_stop"
+                elif (dynamic is not None and drawdown >= Decimal(str(dynamic)) and
+                      (not params.get("dynamic_stop_requires_ema", False) or live.get("dynamic_stop_ema_confirmed", False))):
+                    exit_reason = "stop_loss"
+                elif not point.sell:
+                    exit_reason = ""
+            if quantity > 0 and exit_reason:
                 gross = quantity * price
                 fee = gross * self.risk.paper_fee_rate
                 pnl = gross - fee - Decimal(ledger.entry_cost)
                 ledger.cash = str(Decimal(ledger.cash) + gross - fee)
                 ledger.realized_pnl = str(Decimal(ledger.realized_pnl) + pnl)
                 ledger.losses = ledger.losses + 1 if pnl < 0 else 0
-                ledger.quantity, ledger.entry_cost = "0", "0"
+                cooldown = int(ledger.entry_strategy_params.get("stop_loss_cooldown_seconds", 0))
+                ledger.quantity, ledger.entry_cost, ledger.entry_price = "0", "0", "0"
+                ledger.entry_strategy_params = {}
+                ledger.last_sell_ms, ledger.last_sell_reason = tick.time_ms, exit_reason
+                ledger.stop_loss_cooldown_seconds = cooldown if exit_reason != "strategy" else 0
                 side = "sell"
             elif quantity == 0 and point.buy and not ledger.pause:
                 if ledger.last_entry_ms is not None and tick.time_ms - ledger.last_entry_ms < self.risk.paper_entry_cooldown * 1000:
+                    continue
+                if (ledger.last_sell_ms is not None and ledger.last_sell_reason != "strategy" and
+                        tick.time_ms - ledger.last_sell_ms < ledger.stop_loss_cooldown_seconds * 1000):
                     continue
                 spend = min(self.risk.order_size_usdc, Decimal(ledger.cash))
                 if spend <= 0:
@@ -198,14 +240,16 @@ class TickPaperSession:
                 fee = spend * self.risk.paper_fee_rate
                 quantity = (spend - fee) / price
                 ledger.cash = str(Decimal(ledger.cash) - spend)
-                ledger.quantity, ledger.entry_cost = str(quantity), str(spend)
+                ledger.quantity, ledger.entry_cost, ledger.entry_price = str(quantity), str(spend), str(price)
+                ledger.entry_strategy_params = dict(getattr(point, "strategy_params", None) or {})
                 ledger.entries += 1
                 ledger.last_entry_ms = tick.time_ms
                 side = "buy"
             if side:
                 ledger.fees = str(Decimal(ledger.fees) + fee)
                 fills.append({"trade_id": tick.trade_id, "time_ms": tick.time_ms, "side": side,
-                              "price": str(price), "quantity": str(quantity), "fee": str(fee)})
+                              "price": str(price), "quantity": str(quantity), "fee": str(fee),
+                              "reason": exit_reason if side == "sell" else point.reason})
                 self._risk_check(ledger, price, tick.time_ms)
         if observations:
             self._commit(ledger, stream, fills)
@@ -261,6 +305,8 @@ class MedianPaperSession(TickPaperSession):
 
 class RangePaperSession(TickPaperSession):
     def __init__(self, path: Path, *, symbol: str, strategy, risk: BStockEngineConfig):
+        from .range_guard import GuardedRangeMedianConfig, GuardedRangeMedianStream
         from .range_ticks import RangeTickStream
+        stream_type = GuardedRangeMedianStream if isinstance(strategy, GuardedRangeMedianConfig) else RangeTickStream
         super().__init__(path, symbol=symbol, strategy=strategy, risk=risk,
-                         stream_type=RangeTickStream)
+                         stream_type=stream_type)

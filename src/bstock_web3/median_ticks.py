@@ -105,7 +105,7 @@ class MedianTickStream:
         tick = self._ticks[-1]
         return {"time_ms": tick.time_ms, "price": tick.price}
 
-    def accept_page(self, rows, *, now_ms: int, warmup=False) -> tuple[MedianObservation, ...]:
+    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None) -> tuple[MedianObservation, ...]:
         _integer(now_ms, "observation time")
         try:
             if type(warmup) is not bool or not isinstance(rows, list) or len(rows) > 1000:
