@@ -2,32 +2,32 @@
 
 ## 来源与边界
 
-V1 从 `D:\projectQ\alpha2` 的 `codex/bstock-spot-adapter` 分支提取 bStock 专用能力，
-重新组织为独立包 `bstock_web3`。本仓库没有 Git submodule、路径依赖或
-`alpha2.*` import，也不连接 Alpha2 的数据库、运行目录和配置。
+V1 从原研究系统的 bStock 适配分支提取专用能力，重新组织为独立包
+`bstock_web3`。本仓库没有 Git submodule、路径依赖或原系统 import，也不连接
+原系统的数据库、运行目录和配置。
 
 迁移的设计与能力：
 
-- `alpha2.bstock.catalog`：bStock 目录和市场状态；
-- `alpha2.data.providers.binance_spot`：公共 Spot K 线 REST 逻辑；
-- `alpha2.bstock.market_data`：已闭合 1m/5m 多周期快照；
-- `alpha2.bstock.strategy`：MTF EMA 信号；
-- `alpha2.bstock.wallet`：`baw --json` 钱包适配；
-- `alpha2.bstock.engine`：paper/quote/live-confirmed 状态机和安全闸门；
-- `alpha2.bstock.history`：1s 下载、断点恢复和 1m/5m 聚合思想；
-- `alpha2.bstock.desktop`：独立监控窗口的交互与安全语义。
+- bStock 目录和市场状态；
+- Binance 公共 Spot K 线 REST 逻辑；
+- 已闭合 1m/5m 多周期快照；
+- MTF EMA 信号；
+- `baw --json` 钱包适配；
+- paper/quote/live-confirmed 状态机和安全闸门；
+- 1s 下载、断点恢复和 1m/5m 聚合；
+- 独立监控窗口的交互与安全语义。
 
 ## 有意未迁移
 
-Alpha2 的全量策略目录、Range Bar/Feature Pipeline、账户数据库、旧交易界面和
-Binance Alpha/普通币现货执行器没有进入 V1。这些模块耦合于 Alpha2 内部模型，
+原研究系统的全量策略目录、Range Bar/Feature Pipeline、账户数据库、旧交易界面和
+Binance Alpha/普通币现货执行器没有进入 V1。这些模块耦合于原系统内部模型，
 复制它们会破坏“独立项目”边界。V1 当前只保证 MTF EMA 策略可以独立采集、回测、
 模拟、报价和受控实盘。
 
 ## 后续合并原则
 
-如果未来需要把研究成果回灌 Alpha2，应通过明确的接口或独立发布包合并，不能把
-本仓库运行目录直接复制回 Alpha2。合并前分别运行两个仓库的测试，并在独立分支做
+如果未来需要把研究成果回灌源研究系统，应通过明确的接口或独立发布包合并，不能把
+本仓库运行目录直接复制回源系统。合并前分别运行两个仓库的测试，并在独立分支做
 cherry-pick 或适配提交。
 
 ## 安全说明

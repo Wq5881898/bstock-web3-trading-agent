@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import math
 
 from .catalog import BStockAsset
 from .models import Kline, MarketInstrument
@@ -44,7 +45,21 @@ class BStockMultiTimeframeFeed:
 
 
 def _closed(bars: list[Kline], minutes: int, now: datetime) -> list[Kline]:
-    return [bar for bar in bars if _utc(bar.time) + timedelta(minutes=minutes) <= _utc(now)]
+    result = []
+    previous = None
+    for bar in bars:
+        stamp = _utc(bar.time)
+        values = (bar.open, bar.high, bar.low, bar.close, bar.volume)
+        if (not all(math.isfinite(v) for v in values) or min(values[:4]) <= 0 or bar.volume < 0
+                or bar.low > min(bar.open, bar.close) or bar.high < max(bar.open, bar.close)
+                or stamp.timestamp() % (minutes * 60) != 0):
+            raise ValueError("Invalid OHLCV or misaligned candle")
+        if previous is not None and stamp <= previous:
+            raise ValueError("Duplicate or unordered candles")
+        previous = stamp
+        if stamp + timedelta(minutes=minutes) <= _utc(now):
+            result.append(bar)
+    return result
 
 
 def _utc(value: datetime) -> datetime:

@@ -9,4 +9,13 @@ build/
 runtime/
 kline_history/
 eligible*.json
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
 

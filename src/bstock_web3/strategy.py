@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 from .market_data import MultiTimeframeSnapshot
@@ -22,6 +23,15 @@ class MtfEmaConfig:
     stop_loss: float = 0.004
 
     def __post_init__(self) -> None:
+        for name in ("trend_short", "trend_long", "entry_short", "entry_long", "atr_period"):
+            if type(getattr(self, name)) is not int or not 1 <= getattr(self, name) <= 1000:
+                raise ValueError("Strategy periods must be integers in [1, 1000]")
+        for name in ("min_trend_spread", "min_expected_edge", "stop_loss"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value < 1:
+                raise ValueError("Strategy fractions must be finite and in [0, 1)")
+        if self.stop_loss == 0:
+            raise ValueError("Stop loss must be positive")
         if not 1 <= self.trend_short < self.trend_long:
             raise ValueError("5m EMA 参数必须满足 1 <= short < long")
         if not 1 <= self.entry_short < self.entry_long:
@@ -62,6 +72,10 @@ class MtfEmaStrategy:
         required_5m = max(self.config.trend_long + 1, self.config.atr_period + 1)
         if len(snapshot.one_minute) < required_1m or len(snapshot.five_minute) < required_5m:
             return SignalDecision("hold", "warming_up", None, signal_time)
+        for bars, seconds in ((snapshot.one_minute, 60), (snapshot.five_minute, 300)):
+            age = (snapshot.observed_at - bars[-1].time).total_seconds()
+            if not seconds <= age < 2 * seconds:
+                return SignalDecision("hold", "stale_or_unclosed_timeframe", None, signal_time)
 
         one = [float(row.close) for row in snapshot.one_minute]
         five = [float(row.close) for row in snapshot.five_minute]

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
+import math
 from pathlib import Path
 import secrets
 from typing import Literal
 
 from .catalog import BStockAsset, BStockCatalogClient
 from .eligibility import EligibilitySnapshot
-from .market_data import BStockMultiTimeframeFeed
-from .strategy import MtfEmaStrategy, PositionView, SignalDecision
+from .market_data import BStockMultiTimeframeFeed, MultiTimeframeSnapshot
+from .strategy import MtfEmaConfig, MtfEmaStrategy, PositionView, SignalDecision
 from .wallet import AgenticWalletCli, USDC_BSC, WalletOrderResult, WalletQuote
 
 
@@ -20,11 +21,22 @@ EngineMode = Literal["paper", "quote", "live-confirmed"]
 
 @dataclass
 class EngineState:
+    state_symbol: str | None = None
+    state_mode: str | None = None
     cash_usdc: str = "1000"
     position_quantity: str = "0"
     entry_price: str = "0"
     realized_pnl: str = "0"
     fees_usdc: str = "0"
+    paper_entry_cost: str | None = None
+    paper_risk_day: str = ""
+    paper_risk_baseline: str | None = None
+    paper_last_equity: str | None = None
+    paper_buy_pause: str = ""
+    paper_daily_entries: int = 0
+    paper_loss_streak: int = 0
+    paper_last_entry_at: str | None = None
+    paper_strategy_config: dict | None = None
     last_signal_bar: str | None = None
     pending_order_id: str | None = None
     pending_action: str | None = None
@@ -48,10 +60,35 @@ class BStockEngineConfig:
     max_quote_age_seconds: float = 45.0
     eligibility_file: Path | None = None
     state_file: Path | None = None
+    paper_daily_loss_limit: Decimal = Decimal("10")
+    paper_position_cap: Decimal = Decimal("100")
+    paper_max_daily_entries: int = 20
+    paper_max_loss_streak: int = 3
+    paper_entry_cooldown: int = 60
+    strategy_config: MtfEmaConfig = field(default_factory=MtfEmaConfig)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.strategy_config, MtfEmaConfig):
+            raise ValueError("Expected MTF EMA configuration")
+        if self.mode != "paper" and self.strategy_config != MtfEmaConfig():
+            raise ValueError("Custom strategy settings are paper-only")
+        if self.mode not in ("paper", "quote", "live-confirmed"):
+            raise ValueError("Unknown engine mode")
+        for name in ("order_size_usdc", "paper_fee_rate", "min_net_edge_bps", "paper_daily_loss_limit", "paper_position_cap"):
+            value = getattr(self, name)
+            if not isinstance(value, Decimal) or not value.is_finite():
+                raise ValueError(f"{name} must be a finite Decimal")
+        if isinstance(self.max_quote_age_seconds, bool) or not math.isfinite(self.max_quote_age_seconds):
+            raise ValueError("Quote age must be finite")
         if self.order_size_usdc <= 0:
             raise ValueError("order_size_usdc 必须大于 0")
+        if self.paper_daily_loss_limit <= 0:
+            raise ValueError("Paper daily loss limit must be positive")
+        if self.paper_position_cap <= 0 or (self.mode == "paper" and self.order_size_usdc > self.paper_position_cap):
+            raise ValueError("Paper order budget exceeds position cost cap")
+        for name in ("paper_max_daily_entries", "paper_max_loss_streak", "paper_entry_cooldown"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < (0 if name == "paper_entry_cooldown" else 1):
+                raise ValueError("Invalid paper risk integer")
         if not Decimal("0") <= self.paper_fee_rate < Decimal("1"):
             raise ValueError("paper_fee_rate 必须在 [0, 1) 范围内")
         if self.min_net_edge_bps < 0:
@@ -83,6 +120,8 @@ class EngineEvent:
     mode: EngineMode
     plan: TradePlan | None = None
     paper_fill: dict[str, str] | None = None
+    market_snapshot: MultiTimeframeSnapshot | None = None
+    paper_risk_status: str = ""
 
 
 class BStockEngine:
@@ -94,10 +133,51 @@ class BStockEngine:
         self.config = config
         self.catalog = catalog or BStockCatalogClient()
         self.feed = feed or BStockMultiTimeframeFeed()
-        self.strategy = strategy or MtfEmaStrategy()
+        self.strategy = strategy or MtfEmaStrategy(config.strategy_config)
         self.wallet = wallet or AgenticWalletCli()
         self.asset: BStockAsset | None = None
         self.state = self._load_state()
+        if self.config.mode == "paper" and isinstance(self.strategy, MtfEmaStrategy) and Decimal(self.state.position_quantity) > 0:
+            previous_config = self.state.paper_strategy_config or asdict(MtfEmaConfig())
+            if previous_config != asdict(self.strategy.config):
+                raise RuntimeError("持仓策略参数不匹配，请恢复原参数 / Open position requires its original strategy settings")
+        self._resume_requested = False
+
+    def paper_control(self, action):
+        if self.config.mode != "paper" or action not in ("pause", "resume"):
+            raise ValueError("Paper control only")
+        if action == "pause":
+            self._resume_requested = False
+            self.state.paper_buy_pause = self.state.paper_buy_pause or "MANUAL"
+            self._save_state()
+        else:
+            self._resume_requested = True  # evaluated only after fresh valuation
+
+    def _paper_risk(self, price, observed):
+        equity = Decimal(self.state.cash_usdc) + Decimal(self.state.position_quantity) * price
+        day = observed.astimezone(timezone.utc).date().isoformat()
+        if self.state.paper_risk_day and day < self.state.paper_risk_day:
+            self.state.paper_buy_pause = self.state.paper_buy_pause or "CLOCK_REWIND"
+            self._save_state()
+            return
+        if self.state.paper_risk_day != day:
+            self.state.paper_risk_day = day
+            self.state.paper_risk_baseline = self.state.paper_last_equity or str(equity)
+            self.state.paper_daily_entries = 0
+        loss = Decimal(self.state.paper_risk_baseline) - equity
+        if loss >= self.config.paper_daily_loss_limit:
+            self.state.paper_buy_pause = self.state.paper_buy_pause or "DAILY_LOSS"
+        elif self.state.paper_daily_entries >= self.config.paper_max_daily_entries:
+            self.state.paper_buy_pause = self.state.paper_buy_pause or "DAILY_ENTRY_LIMIT"
+        elif self.state.paper_loss_streak >= self.config.paper_max_loss_streak:
+            self.state.paper_buy_pause = self.state.paper_buy_pause or "CONSECUTIVE_LOSSES"
+        if self._resume_requested:
+            self._resume_requested = False
+            if loss < self.config.paper_daily_loss_limit and self.state.paper_daily_entries < self.config.paper_max_daily_entries:
+                self.state.paper_buy_pause = ""
+                self.state.paper_loss_streak = 0
+        self.state.paper_last_equity = str(equity)
+        self._save_state()
 
     def adopt_position(self, *, quantity: Decimal, entry_price: Decimal) -> None:
         if quantity <= 0 or entry_price <= 0:
@@ -109,6 +189,10 @@ class BStockEngine:
         self._save_state()
 
     def evaluate_once(self, *, now: datetime | None = None) -> EngineEvent:
+        event = self._evaluate_once(now=now)
+        return replace(event, paper_risk_status=self.state.paper_buy_pause or "ACTIVE") if self.config.mode == "paper" else event
+
+    def _evaluate_once(self, *, now: datetime | None = None) -> EngineEvent:
         asset = self.asset or self.catalog.resolve(self.config.symbol)
         self.asset = asset
         if self.config.mode == "live-confirmed" and self.state.pending_order_id:
@@ -121,24 +205,42 @@ class BStockEngine:
                 "hold", f"market_unavailable:{status.reason_code or 'UNKNOWN'}", None, None
             ), self.config.mode)
         snapshot = self.feed.fetch(asset, now=now)
+        if snapshot.signal_bar_time is None or not 60 <= (snapshot.observed_at - snapshot.signal_bar_time).total_seconds() < 120:
+            return EngineEvent(asset, SignalDecision("hold", "stale_or_missing_candles", None, None),
+                               self.config.mode, market_snapshot=snapshot)
         signal_bar = snapshot.signal_bar_time.isoformat() if snapshot.signal_bar_time else None
-        if signal_bar is not None and signal_bar == self.state.last_signal_bar:
+        if self.config.mode == "paper":
+            self._paper_risk(Decimal(str(snapshot.one_minute[-1].close)), snapshot.observed_at)
+        if signal_bar is not None and self.state.last_signal_bar is not None and datetime.fromisoformat(signal_bar) <= datetime.fromisoformat(self.state.last_signal_bar):
             return EngineEvent(asset, SignalDecision(
                 "hold", "signal_bar_already_processed", None, signal_bar
-            ), self.config.mode)
+            ), self.config.mode, market_snapshot=snapshot)
         decision = self.strategy.evaluate(snapshot, self.state.position)
+        if self.config.mode == "paper" and decision.action == "buy" and self.state.paper_buy_pause:
+            decision = replace(decision, action="hold", reason="paper_buys_paused:" + self.state.paper_buy_pause)
+        if self.config.mode == "paper" and decision.action == "buy" and self.state.paper_last_entry_at:
+            age = (snapshot.observed_at - datetime.fromisoformat(self.state.paper_last_entry_at)).total_seconds()
+            if age < self.config.paper_entry_cooldown:
+                decision = replace(decision, action="hold", reason="paper_entry_cooldown")
         if decision.action == "hold":
             self.state.last_signal_bar = signal_bar
             self._save_state()
-            return EngineEvent(asset, decision, self.config.mode)
+            return EngineEvent(asset, decision, self.config.mode, market_snapshot=snapshot)
         if self.config.mode == "paper":
+            previous_bar = self.state.last_signal_bar
             self.state.last_signal_bar = signal_bar
-            return EngineEvent(asset, decision, self.config.mode, paper_fill=self._paper_fill(decision))
+            try:
+                fill = self._paper_fill(decision, observed=snapshot.observed_at)
+            except Exception:
+                self.state.last_signal_bar = previous_bar
+                raise
+            self._paper_risk(Decimal(str(decision.price)), snapshot.observed_at)
+            return EngineEvent(asset, decision, self.config.mode, paper_fill=fill, market_snapshot=snapshot)
         self.wallet.require_connected()
         plan = self._build_plan(asset, decision)
         self.state.last_signal_bar = signal_bar
         self._save_state()
-        return EngineEvent(asset, decision, self.config.mode, plan=plan)
+        return EngineEvent(asset, decision, self.config.mode, plan=plan, market_snapshot=snapshot)
 
     def execute_confirmed(self, plan: TradePlan, confirmation: str) -> WalletOrderResult:
         if self.config.mode != "live-confirmed":
@@ -240,21 +342,48 @@ class BStockEngine:
                          f"CONFIRM {secrets.token_hex(4).upper()}", decision,
                          datetime.now(timezone.utc))
 
-    def _paper_fill(self, decision: SignalDecision) -> dict[str, str]:
+    def _paper_fill(self, decision: SignalDecision, *, observed=None) -> dict[str, str]:
+        previous = EngineState(**asdict(self.state))
+        try:
+            return self._commit_paper_fill(decision, observed=observed)
+        except Exception:
+            self.state = previous
+            raise
+
+    def _commit_paper_fill(self, decision: SignalDecision, *, observed=None) -> dict[str, str]:
         price, fee_rate = Decimal(str(decision.price)), self.config.paper_fee_rate
+        if not price.is_finite() or price <= 0 or decision.action not in ("buy", "sell"):
+            raise ValueError("Invalid paper fill signal")
+        held = Decimal(self.state.position_quantity)
+        if decision.action == "buy" and held > 0:
+            raise ValueError("Paper BUY cannot overwrite an existing position")
+        if decision.action == "sell" and held <= 0:
+            raise ValueError("Paper SELL requires an existing position")
         if decision.action == "buy":
             spend = min(self.config.order_size_usdc, Decimal(self.state.cash_usdc))
+            if spend <= 0:
+                raise ValueError("Insufficient paper cash")
+            if spend > self.config.paper_position_cap:
+                raise ValueError("Paper position cost cap exceeded")
             fee, quantity = spend * fee_rate, (spend * (1 - fee_rate)) / price
             self.state.cash_usdc = str(Decimal(self.state.cash_usdc) - spend)
             self.state.position_quantity, self.state.entry_price = str(quantity), str(price)
+            self.state.paper_entry_cost = str(spend)
+            self.state.paper_daily_entries += 1
+            self.state.paper_last_entry_at = (observed or datetime.now(timezone.utc)).isoformat()
             fill = {"side": "buy", "price": str(price), "quantity": str(quantity), "fee": str(fee)}
         else:
             quantity = Decimal(self.state.position_quantity)
-            gross, cost = quantity * price, quantity * Decimal(self.state.entry_price)
+            gross = quantity * price
+            if self.state.paper_entry_cost is None:
+                raise ValueError("Legacy paper position has no verified entry cost; review required")
+            cost = Decimal(self.state.paper_entry_cost)
             fee = gross * fee_rate
             self.state.cash_usdc = str(Decimal(self.state.cash_usdc) + gross - fee)
             self.state.realized_pnl = str(Decimal(self.state.realized_pnl) + gross - fee - cost)
+            self.state.paper_loss_streak = self.state.paper_loss_streak + 1 if gross - fee - cost < 0 else 0
             self.state.position_quantity, self.state.entry_price = "0", "0"
+            self.state.paper_entry_cost = None
             fill = {"side": "sell", "price": str(price), "quantity": str(quantity), "fee": str(fee)}
         self.state.fees_usdc = str(Decimal(self.state.fees_usdc) + fee)
         self._save_state()
@@ -292,6 +421,43 @@ class BStockEngine:
         try:
             payload = json.loads(self._state_path().read_text(encoding="utf-8"))
             state = EngineState(**payload)
+            if not isinstance(state.paper_buy_pause, str) or state.paper_buy_pause not in ("", "MANUAL", "DAILY_LOSS", "CLOCK_REWIND", "DAILY_ENTRY_LIMIT", "CONSECUTIVE_LOSSES"):
+                raise ValueError("Invalid paper pause state")
+            for value in (state.paper_daily_entries, state.paper_loss_streak):
+                if type(value) is not int or value < 0:
+                    raise ValueError("Invalid paper risk counter")
+            if state.paper_last_entry_at is not None and datetime.fromisoformat(state.paper_last_entry_at).tzinfo is None:
+                raise ValueError("Paper entry timestamp requires timezone")
+            if bool(state.paper_risk_day) != (state.paper_risk_baseline is not None):
+                raise ValueError("Incomplete paper risk state")
+            if state.paper_risk_day:
+                datetime.strptime(state.paper_risk_day, "%Y-%m-%d")
+            for value in (state.paper_risk_baseline, state.paper_last_equity):
+                if value is not None and (not Decimal(value).is_finite() or Decimal(value) < 0):
+                    raise ValueError("Invalid paper equity state")
+            if state.state_symbol is not None and state.state_symbol != self.config.symbol.upper():
+                raise ValueError("State symbol mismatch")
+            if state.state_mode is not None and state.state_mode != self.config.mode:
+                raise ValueError("State mode mismatch")
+            if state.paper_strategy_config is not None:
+                if not isinstance(state.paper_strategy_config, dict) or set(state.paper_strategy_config) != set(asdict(MtfEmaConfig())):
+                    raise ValueError("Invalid persisted strategy fields")
+                MtfEmaConfig(**state.paper_strategy_config)
+            for name in ("cash_usdc", "position_quantity", "entry_price", "realized_pnl", "fees_usdc"):
+                if not Decimal(getattr(state, name)).is_finite():
+                    raise ValueError("Non-finite state value")
+            if Decimal(state.entry_price) < 0 or Decimal(state.fees_usdc) < 0:
+                raise ValueError("Negative entry price or fees")
+            if Decimal(state.position_quantity) == 0 and Decimal(state.entry_price) != 0:
+                raise ValueError("Flat position cannot have entry price")
+            if state.paper_entry_cost is not None:
+                cost = Decimal(state.paper_entry_cost)
+                if not cost.is_finite() or cost <= 0 or Decimal(state.position_quantity) <= 0:
+                    raise ValueError("Invalid paper entry cost")
+            if state.last_signal_bar is not None:
+                parsed = datetime.fromisoformat(state.last_signal_bar)
+                if parsed.tzinfo is None:
+                    raise ValueError("Signal timestamp must include timezone")
             if Decimal(state.cash_usdc) < 0 or Decimal(state.position_quantity) < 0:
                 raise ValueError("余额或仓位不能为负数")
             if Decimal(state.position_quantity) > 0 and Decimal(state.entry_price) <= 0:
@@ -305,15 +471,27 @@ class BStockEngine:
                 raise ValueError("未决订单记录不完整")
             if state.pending_action not in {None, "buy", "sell"}:
                 raise ValueError("未决订单 action 非法")
+            if not state.pending_order_id and any(value is not None for value in pending_fields):
+                raise ValueError("Orphan pending-order fields")
+            if state.pending_order_id:
+                pending_amount = Decimal(state.pending_from_amount)
+                if not pending_amount.is_finite() or pending_amount <= 0:
+                    raise ValueError("Invalid pending amount")
+                if datetime.fromisoformat(state.pending_submitted_at).tzinfo is None:
+                    raise ValueError("Pending timestamp must include timezone")
             return state
         except FileNotFoundError:
             return EngineState()
-        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, TypeError, ValueError, InvalidOperation) as exc:
             raise RuntimeError(
                 f"状态文件损坏或不可读取，已停止以避免误判为空仓：{self._state_path()}"
             ) from exc
 
     def _save_state(self) -> None:
+        if self.config.mode == "paper" and isinstance(self.strategy, MtfEmaStrategy):
+            self.state.paper_strategy_config = asdict(self.strategy.config)
+        self.state.state_symbol = self.config.symbol.upper()
+        self.state.state_mode = self.config.mode
         path = self._state_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + ".tmp")
