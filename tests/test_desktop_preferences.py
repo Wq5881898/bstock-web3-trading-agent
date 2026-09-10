@@ -3,6 +3,7 @@ import json
 import pytest
 
 from bstock_web3.desktop_preferences import DesktopPreferences, load_preferences, save_preferences
+from bstock_web3.range_ticks import RangeStrategyConfig
 
 
 def test_roundtrip_and_isolation(tmp_path):
@@ -15,7 +16,7 @@ def test_roundtrip_and_isolation(tmp_path):
 
 
 @pytest.mark.parametrize("changes", [
-    {"version": True}, {"version": 3}, {"mode": "live-confirmed"},
+    {"version": True}, {"version": 5}, {"mode": "live-confirmed"},
     {"symbol": "../BTC"}, {"symbol": None}, {"order_size_usdc": "NaN"},
     {"order_size_usdc": "Infinity"}, {"order_size_usdc": "1.001"},
     {"paper_daily_loss_limit": True}, {"paper_daily_loss_limit": "0"},
@@ -50,3 +51,13 @@ def test_failed_replace_preserves_prior_settings(monkeypatch, tmp_path):
         save_preferences(path, replace(DesktopPreferences(), symbol="BTC"))
     assert path.read_bytes() == original
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_range_preferences_validate_family_and_roundtrip(tmp_path):
+    path = tmp_path / "preferences.json"
+    settings = replace(DesktopPreferences(), strategy_kind="range-median",
+        range_config=asdict(RangeStrategyConfig(family="median", range_bps=50, window=30, deviation=.004)))
+    save_preferences(path, settings)
+    assert load_preferences(path) == settings
+    with pytest.raises(ValueError, match="family mismatch"):
+        replace(settings, strategy_kind="range-ema")

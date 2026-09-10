@@ -98,6 +98,13 @@ class MedianTickStream:
     def next_id(self):
         return self._ticks[-1].trade_id + 1 if self._ticks else None
 
+    def latest_tick(self):
+        """Return the last accepted market point without exposing mutable state."""
+        if not self._ticks:
+            return None
+        tick = self._ticks[-1]
+        return {"time_ms": tick.time_ms, "price": tick.price}
+
     def accept_page(self, rows, *, now_ms: int, warmup=False) -> tuple[MedianObservation, ...]:
         _integer(now_ms, "observation time")
         try:

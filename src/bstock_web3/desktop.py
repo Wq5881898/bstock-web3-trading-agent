@@ -12,6 +12,8 @@ from .engine import BStockEngine, BStockEngineConfig
 from .poll_runner import PollRunner
 from .desktop_preferences import DesktopPreferences, load_preferences, save_preferences
 from .strategy import MtfEmaConfig
+from .median_ticks import TickMedianConfig
+from .range_ticks import RANGE_BPS, RANGE_MEDIAN_WINDOWS, RangeStrategyConfig
 
 
 STYLE = """
@@ -45,10 +47,13 @@ def desktop_state_file(symbol: str, mode: str) -> Path:
     return runtime_root / f"{safe_symbol}_{mode}.json"
 
 
-def create_monitor_class(engine_factory=BStockEngine):
+def create_monitor_class(engine_factory=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
+    from .median_monitor import MedianMonitor
+    if engine_factory is None:
+        engine_factory = lambda config: MedianMonitor(config) if config.strategy_kind != "mtf" else BStockEngine(config)
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -145,14 +150,17 @@ def create_monitor_class(engine_factory=BStockEngine):
             strategy_layout = QtWidgets.QVBoxLayout(strategy_page)
             self.strategy_choice = QtWidgets.QComboBox()
             self.strategy_choice.addItems(["MTF EMA · 默认 / Default", "MTF EMA · 自定义 / Custom",
-                "Median · 待接入逐笔行情 / Pending tick feed",
-                "Range / Slope / Median Auto · 待迁移 / Pending migration"])
-            for index in (2, 3):
+                "Median · 逐笔模拟 / Tick paper",
+                "Range EMA · 固定区间模拟 / Fixed range paper",
+                "Range Median · 固定区间模拟 / Fixed range paper",
+                "Median Auto · 待迁移 / Pending migration"])
+            for index in (5,):
                 self.strategy_choice.model().item(index).setEnabled(False)
             strategy_layout.addWidget(self.strategy_choice)
             strategy_layout.addWidget(QtWidgets.QLabel(
                 "自定义仅限模拟；持仓期间必须使用原参数。\nCustom settings: paper only; open positions retain original parameters.\n"
-                "周期单位为已收盘K线；比例0.004 = 0.4%。\nPeriods use closed candles; fraction 0.004 = 0.4%."))
+                "MTF使用收盘K线；Median与Range使用逐笔成交和独立模拟账本。比例0.004 = 0.4%。\n"
+                "MTF: closed candles; Median/Range: trade ticks, separate paper funds. 0.004 = 0.4%."))
             self.strategy_inputs = {}
             strategy_grid = QtWidgets.QFormLayout()
             labels = {
@@ -173,8 +181,65 @@ def create_monitor_class(engine_factory=BStockEngine):
                 self.strategy_inputs[key] = edit
                 strategy_grid.addRow(labels[key], edit)
             strategy_layout.addLayout(strategy_grid)
+            self.strategy_grid = strategy_grid
+            self.median_inputs = {}
+            self.median_grid = QtWidgets.QFormLayout()
+            for key, value in asdict(TickMedianConfig()).items():
+                edit = QtWidgets.QSpinBox() if key == "window" else QtWidgets.QDoubleSpinBox()
+                if key == "window":
+                    edit.setRange(1, 100)
+                else:
+                    edit.setDecimals(6)
+                    edit.setRange(0, .999999)
+                    edit.setSingleStep(.0001)
+                edit.setValue(value)
+                self.median_inputs[key] = edit
+                self.median_grid.addRow({"window": "逐笔窗口 / Trade window", "entry_deviation": "买入偏离 / Entry deviation",
+                                        "exit_deviation": "卖出偏离 / Exit deviation"}[key], edit)
+            strategy_layout.addLayout(self.median_grid)
+            self.range_inputs = {}
+            self.range_grid = QtWidgets.QFormLayout()
+            defaults = asdict(RangeStrategyConfig())
+            for key in ("range_bps", "short", "long", "entry_threshold", "exit_threshold", "window", "deviation"):
+                if key in ("range_bps", "window"):
+                    edit = QtWidgets.QComboBox()
+                    edit.addItems([str(value) for value in (RANGE_BPS if key == "range_bps" else RANGE_MEDIAN_WINDOWS)])
+                    edit.setCurrentText(str(defaults[key]))
+                elif key in ("short", "long"):
+                    edit = QtWidgets.QSpinBox()
+                    edit.setRange(2, 100)
+                    edit.setValue(defaults[key])
+                else:
+                    edit = QtWidgets.QDoubleSpinBox()
+                    edit.setDecimals(6)
+                    edit.setRange(0, .999999)
+                    edit.setSingleStep(.0001)
+                    edit.setValue(defaults[key])
+                self.range_inputs[key] = edit
+                self.range_grid.addRow({
+                    "range_bps": "区间大小 bps / Range size", "short": "Range EMA 快线 / Fast",
+                    "long": "Range EMA 慢线 / Slow", "entry_threshold": "EMA 买入阈值 / Entry threshold",
+                    "exit_threshold": "EMA 卖出阈值 / Exit threshold", "window": "Range Median 窗口 / Window",
+                    "deviation": "Median 偏离 / Deviation"}[key], edit)
+            strategy_layout.addLayout(self.range_grid)
             strategy_layout.addStretch(1)
             self.tabs.addTab(strategy_page, "策略 / Strategies")
+            account_page = QtWidgets.QWidget()
+            account_layout = QtWidgets.QVBoxLayout(account_page)
+            self.account_summary = QtWidgets.QLabel("尚无账户快照 / No account snapshot")
+            self.account_summary.setWordWrap(True)
+            account_layout.addWidget(self.account_summary)
+            account_layout.addWidget(QtWidgets.QLabel(
+                "Median/Range显示SQLite最近100笔；MTF仅显示本次运行事件，不是交易所账单。\n"
+                "Median/Range: latest 100 SQLite fills; MTF events are not an exchange statement."))
+            self.fill_history = QtWidgets.QTableWidget(0, 6)
+            self.fill_history.setHorizontalHeaderLabels(
+                ["成交ID / Trade ID", "UTC毫秒 / UTC ms", "方向 / Side", "价格 / Price", "数量 / Qty", "手续费 / Fee"])
+            for column in range(5):
+                self.fill_history.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
+            self.fill_history.horizontalHeader().setSectionResizeMode(5, QtWidgets.QHeaderView.Stretch)
+            account_layout.addWidget(self.fill_history)
+            self.tabs.addTab(account_page, "账户 / Account")
             self.strategy_choice.currentIndexChanged.connect(self.strategy_selection_changed)
             self.strategy_selection_changed()
             layout.addWidget(self.tabs, 2)
@@ -189,16 +254,40 @@ def create_monitor_class(engine_factory=BStockEngine):
 
         def strategy_selection_changed(self, index=None):
             custom = self.strategy_choice.currentIndex() == 1
+            median = self.strategy_choice.currentIndex() == 2
+            range_ema = self.strategy_choice.currentIndex() == 3
+            range_median = self.strategy_choice.currentIndex() == 4
             if not custom:
                 for key, value in asdict(MtfEmaConfig()).items():
                     self.strategy_inputs[key].setValue(value)
             for edit in self.strategy_inputs.values():
                 edit.setEnabled(custom and self.runner is None)
+                edit.setVisible(not (median or range_ema or range_median))
+                self.strategy_grid.labelForField(edit).setVisible(not (median or range_ema or range_median))
+            for edit in self.median_inputs.values():
+                edit.setEnabled(median and self.runner is None)
+                edit.setVisible(median)
+                self.median_grid.labelForField(edit).setVisible(median)
+            for key, edit in self.range_inputs.items():
+                visible = range_ema or range_median
+                family_field = key in (("short", "long", "entry_threshold", "exit_threshold") if range_ema else ("window", "deviation"))
+                edit.setEnabled(visible and family_field and self.runner is None or visible and key == "range_bps" and self.runner is None)
+                edit.setVisible(visible and (family_field or key == "range_bps"))
+                self.range_grid.labelForField(edit).setVisible(edit.isVisible())
 
         def selected_strategy_config(self):
-            if self.strategy_choice.currentIndex() not in (0, 1):
+            if self.strategy_choice.currentIndex() not in (0, 1, 2, 3, 4):
                 raise ValueError("Strategy is not available")
             return MtfEmaConfig(**{key: edit.value() for key, edit in self.strategy_inputs.items()})
+
+        def selected_range_config(self):
+            index = self.strategy_choice.currentIndex()
+            values = {key: (int(edit.currentText()) if isinstance(edit, QtWidgets.QComboBox) else edit.value())
+                      for key, edit in self.range_inputs.items()}
+            return RangeStrategyConfig(family="median" if index == 4 else "ema", **values)
+
+        def selected_strategy_kind(self):
+            return {2: "median", 3: "range-ema", 4: "range-median"}.get(self.strategy_choice.currentIndex(), "mtf")
 
         def save_inputs(self):
             if self.runner is not None:
@@ -209,6 +298,9 @@ def create_monitor_class(engine_factory=BStockEngine):
                     order_size_usdc=str(self.amount.value()),
                     paper_daily_loss_limit=str(self.loss_limit.value()),
                     strategy_config=asdict(self.selected_strategy_config()),
+                    strategy_kind=self.selected_strategy_kind(),
+                    median_config={key: edit.value() for key, edit in self.median_inputs.items()},
+                    range_config=asdict(self.selected_range_config()),
                     **{k: str(e.value()) if k == "paper_position_cap" else e.value()
                        for k, e in self.risk_inputs.items()})
                 save_preferences(self.preferences_path, preferences)
@@ -236,9 +328,17 @@ def create_monitor_class(engine_factory=BStockEngine):
             for key, edit in self.risk_inputs.items():
                 value = getattr(preferences, key)
                 edit.setValue(float(value) if key == "paper_position_cap" else value)
-            self.strategy_choice.setCurrentIndex(0 if preferences.strategy_config == asdict(MtfEmaConfig()) else 1)
+            self.strategy_choice.setCurrentIndex({"median": 2, "range-ema": 3, "range-median": 4}.get(
+                preferences.strategy_kind, 0 if preferences.strategy_config == asdict(MtfEmaConfig()) else 1))
+            for key, value in preferences.median_config.items():
+                self.median_inputs[key].setValue(value)
             for key, value in preferences.strategy_config.items():
                 self.strategy_inputs[key].setValue(value)
+            for key, value in preferences.range_config.items():
+                if key == "family":
+                    continue
+                edit = self.range_inputs[key]
+                edit.setCurrentText(str(value)) if isinstance(edit, QtWidgets.QComboBox) else edit.setValue(value)
             self.strategy_selection_changed()
             self.status.setText("已读取参数；未运行，请核对后启动 / Settings loaded; stopped; review before start")
 
@@ -254,8 +354,15 @@ def create_monitor_class(engine_factory=BStockEngine):
                     mode=self.mode.currentText(), order_size_usdc=Decimal(str(self.amount.value())),
                     paper_daily_loss_limit=Decimal(str(self.loss_limit.value())),
                     strategy_config=self.selected_strategy_config(),
+                    strategy_kind=self.selected_strategy_kind(),
+                    median_config=TickMedianConfig(**{key: edit.value() for key, edit in self.median_inputs.items()}),
+                    range_config=self.selected_range_config(),
                     **{k: Decimal(str(e.value())) if k == "paper_position_cap" else e.value() for k, e in self.risk_inputs.items()},
                     state_file=desktop_state_file(self.symbol.text(), self.mode.currentText()))
+                if config.strategy_kind != "mtf":
+                    from dataclasses import replace
+                    suffix = config.strategy_kind.replace("-", "_")
+                    config = replace(config, state_file=config.state_file.with_name(config.state_file.stem + f"_{suffix}.sqlite"))
             except ValueError as exc:
                 self.status.setText(f"配置错误 / Invalid configuration: {exc}")
                 return
@@ -270,15 +377,17 @@ def create_monitor_class(engine_factory=BStockEngine):
                 self.status.setText("该模拟状态已被另一窗口占用 / Session already owned by another window")
                 return
             self.state_lock = lock
+            self.account_summary.setText("等待当前模拟账户快照 / Waiting for current paper-account snapshot")
+            self.fill_history.setRowCount(0)
             self.runner = PollRunner(lambda: engine_factory(config))
             self.strategy_choice.setEnabled(False)
-            for edit in self.strategy_inputs.values():
+            for edit in (*self.strategy_inputs.values(), *self.median_inputs.values(), *self.range_inputs.values()):
                 edit.setEnabled(False)
             for widget in (self.symbol, self.mode, self.amount, self.loss_limit, self.save_settings, self.load_settings, *self.risk_inputs.values()):
                 widget.setEnabled(False)
             for button in (self.pause_buys, self.resume_buys):
                 button.setEnabled(config.mode == "paper")
-            self.timer.start(15000)
+            self.timer.start(3000 if config.strategy_kind != "mtf" else 15000)
             self.start.setText("停止监控")
             self.status.setText(f"运行中：{config.mode}；不会由 GUI 提交真实交易")
             self.poll()
@@ -297,6 +406,13 @@ def create_monitor_class(engine_factory=BStockEngine):
                 return
             if self.runner is not None:
                 self.runner.close()
+                if not self.runner.close_future.done():
+                    return
+                try:
+                    self.runner.close_future.result()
+                except Exception:
+                    self.status.setText("资源关闭失败；保留状态锁 / Cleanup failed; session lock retained")
+                    return
                 self.runner = None
             if self.state_lock is not None:
                 self.state_lock.unlock()
@@ -330,9 +446,32 @@ def create_monitor_class(engine_factory=BStockEngine):
                 return
             future = self.runner.take()
             if future is None:
+                if not self.timer.isActive():
+                    self.finish_stop()
                 return
             try:
                 event = future.result()
+                account = getattr(event, "account_snapshot", None)
+                if account is not None:
+                    labels = {"cash": "现金/cash", "cash_usdc": "现金/cash", "quantity": "数量/qty",
+                              "position_quantity": "数量/qty", "entry_cost": "成本/cost", "entry_price": "入场价/entry",
+                              "realized_pnl": "已实现/realized", "fees": "费用/fees", "fees_usdc": "费用/fees",
+                              "entries": "开仓/entries", "paper_daily_entries": "开仓/entries",
+                              "losses": "连亏/losses", "paper_loss_streak": "连亏/losses"}
+                    self.account_summary.setText("模拟账户 / Paper account: " +
+                        " · ".join(f"{labels.get(key,key)}={value}" for key, value in account.items()))
+                recent = getattr(event, "recent_fills", ())
+                if account is not None:
+                    self.fill_history.setRowCount(0)
+                for fill in recent:
+                    row_index = self.fill_history.rowCount()
+                    self.fill_history.insertRow(row_index)
+                    values = (fill.get("trade_id", "--"), fill.get("time_ms", "--"), fill.get("side", "--"),
+                              fill.get("price", "--"), fill.get("quantity", "--"), fill.get("fee", "--"))
+                    for column, value in enumerate(values):
+                        self.fill_history.setItem(row_index, column, QtWidgets.QTableWidgetItem(str(value)))
+                if recent:
+                    self.fill_history.scrollToBottom()
                 risk = getattr(event, "paper_risk_status", "")
                 self.risk_label.setText("模拟买入锁 / Paper buy latch: " + (risk or "—"))
                 if risk and risk != "ACTIVE" and risk != self._last_risk:
@@ -353,6 +492,14 @@ def create_monitor_class(engine_factory=BStockEngine):
                 else:
                     self.candles.mark_unavailable()
                 self.status.setText(f"运行中 / Running: {event.mode} · {event.signal.reason}")
+                for fill in getattr(event, "fills", ()):
+                    if self.table.rowCount() >= 500:
+                        self.table.removeRow(0)
+                    fill_row = self.table.rowCount()
+                    self.table.insertRow(fill_row)
+                    for column, value in enumerate((str(fill["time_ms"]), fill["side"], "Median paper · ID " + str(fill["trade_id"]),
+                                                    fill["price"], "--", "--", json.dumps(fill))):
+                        self.table.setItem(fill_row, column, QtWidgets.QTableWidgetItem(value))
                 if self.table.rowCount() >= 500:
                     self.table.removeRow(0)
                 row = self.table.rowCount()

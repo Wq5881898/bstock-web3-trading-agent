@@ -36,6 +36,8 @@ def test_loss_latches_buys_but_signal_sells_continue_across_restart(tmp_path):
     reopen, feed, strategy = setup(tmp_path)
     engine = reopen()
     assert engine.evaluate_once().paper_fill["side"] == "buy"
+    event = engine.evaluate_once()
+    assert Decimal(event.account_snapshot["position_quantity"]) > 0
     feed.price = 80
     feed.now += timedelta(minutes=1)
     strategy.action = "hold"

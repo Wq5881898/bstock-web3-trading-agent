@@ -9,11 +9,13 @@ from pathlib import Path
 import re
 import tempfile
 from .strategy import MtfEmaConfig
+from .median_ticks import TickMedianConfig
+from .range_ticks import RangeStrategyConfig
 
 
 @dataclass(frozen=True)
 class DesktopPreferences:
-    version: int = 2
+    version: int = 4
     symbol: str = "NVDAB"
     mode: str = "paper"
     order_size_usdc: str = "100"
@@ -23,10 +25,32 @@ class DesktopPreferences:
     paper_max_loss_streak: int = 3
     paper_entry_cooldown: int = 60
     strategy_config: dict = field(default_factory=lambda: asdict(MtfEmaConfig()))
+    strategy_kind: str = "mtf"
+    median_config: dict = field(default_factory=lambda: asdict(TickMedianConfig()))
+    range_config: dict = field(default_factory=lambda: asdict(RangeStrategyConfig()))
 
     def __post_init__(self):
-        if type(self.version) is not int or self.version != 2:
+        if type(self.version) is not int or self.version != 4:
             raise ValueError("Unsupported preferences version")
+        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median") or (self.strategy_kind != "mtf" and self.mode != "paper"):
+            raise ValueError("Invalid strategy or non-paper Median")
+        if not isinstance(self.median_config, dict) or set(self.median_config) != set(asdict(TickMedianConfig())):
+            raise ValueError("Invalid Median fields")
+        TickMedianConfig(**self.median_config)
+        for key in ("entry_deviation", "exit_deviation"):
+            value = self.median_config[key]
+            if abs(value * 1000000 - round(value * 1000000)) > 1e-7:
+                raise ValueError("Median fractions support six decimal places")
+        if not isinstance(self.range_config, dict) or set(self.range_config) != set(asdict(RangeStrategyConfig())):
+            raise ValueError("Invalid Range fields")
+        range_config = RangeStrategyConfig(**self.range_config)
+        if ((self.strategy_kind == "range-ema" and range_config.family != "ema") or
+                (self.strategy_kind == "range-median" and range_config.family != "median")):
+            raise ValueError("Range strategy family mismatch")
+        for key in ("entry_threshold", "exit_threshold", "deviation"):
+            value = self.range_config[key]
+            if abs(value * 1000000 - round(value * 1000000)) > 1e-7:
+                raise ValueError("Range fractions support six decimal places")
         if not isinstance(self.strategy_config, dict) or set(self.strategy_config) != set(asdict(MtfEmaConfig())):
             raise ValueError("Invalid strategy fields")
         strategy = MtfEmaConfig(**self.strategy_config)
@@ -76,9 +100,17 @@ def load_preferences(path: Path) -> DesktopPreferences:
         data = json.loads(raw, object_pairs_hook=unique_pairs)
         # The exact previous schema receives the historical, unchanged strategy.
         if isinstance(data, dict) and type(data.get("version")) is int and data["version"] == 1:
-            if set(data) != set(asdict(DesktopPreferences())) - {"strategy_config"}:
+            if set(data) != set(asdict(DesktopPreferences())) - {"strategy_config", "strategy_kind", "median_config", "range_config"}:
                 raise ValueError("Invalid legacy preferences fields")
             data = {**data, "version": 2, "strategy_config": asdict(MtfEmaConfig())}
+        if isinstance(data, dict) and type(data.get("version")) is int and data["version"] == 2:
+            if set(data) != set(asdict(DesktopPreferences())) - {"strategy_kind", "median_config", "range_config"}:
+                raise ValueError("Invalid v2 preferences fields")
+            data = {**data, "version": 3, "strategy_kind": "mtf", "median_config": asdict(TickMedianConfig())}
+        if isinstance(data, dict) and type(data.get("version")) is int and data["version"] == 3:
+            if set(data) != set(asdict(DesktopPreferences())) - {"range_config"}:
+                raise ValueError("Invalid v3 preferences fields")
+            data = {**data, "version": 4, "range_config": asdict(RangeStrategyConfig())}
         if not isinstance(data, dict) or set(data) != set(asdict(DesktopPreferences())):
             raise ValueError("Invalid preferences fields")
         return DesktopPreferences(**data)

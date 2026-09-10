@@ -13,6 +13,8 @@ from .catalog import BStockAsset, BStockCatalogClient
 from .eligibility import EligibilitySnapshot
 from .market_data import BStockMultiTimeframeFeed, MultiTimeframeSnapshot
 from .strategy import MtfEmaConfig, MtfEmaStrategy, PositionView, SignalDecision
+from .median_ticks import TickMedianConfig
+from .range_ticks import RangeStrategyConfig
 from .wallet import AgenticWalletCli, USDC_BSC, WalletOrderResult, WalletQuote
 
 
@@ -66,8 +68,18 @@ class BStockEngineConfig:
     paper_max_loss_streak: int = 3
     paper_entry_cooldown: int = 60
     strategy_config: MtfEmaConfig = field(default_factory=MtfEmaConfig)
+    strategy_kind: str = "mtf"
+    median_config: TickMedianConfig = field(default_factory=TickMedianConfig)
+    range_config: RangeStrategyConfig = field(default_factory=RangeStrategyConfig)
 
     def __post_init__(self) -> None:
+        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig):
+            raise ValueError("Invalid strategy selection")
+        if self.strategy_kind != "mtf" and self.mode != "paper":
+            raise ValueError("Tick/Range strategies are paper-only")
+        if ((self.strategy_kind == "range-ema" and self.range_config.family != "ema") or
+                (self.strategy_kind == "range-median" and self.range_config.family != "median")):
+            raise ValueError("Range selection/configuration mismatch")
         if not isinstance(self.strategy_config, MtfEmaConfig):
             raise ValueError("Expected MTF EMA configuration")
         if self.mode != "paper" and self.strategy_config != MtfEmaConfig():
@@ -122,6 +134,8 @@ class EngineEvent:
     paper_fill: dict[str, str] | None = None
     market_snapshot: MultiTimeframeSnapshot | None = None
     paper_risk_status: str = ""
+    account_snapshot: dict[str, str | int] | None = None
+    recent_fills: tuple[dict, ...] = ()
 
 
 class BStockEngine:
@@ -130,6 +144,8 @@ class BStockEngine:
                  feed: BStockMultiTimeframeFeed | None = None,
                  strategy: MtfEmaStrategy | None = None,
                  wallet: AgenticWalletCli | None = None) -> None:
+        if config.strategy_kind != "mtf":
+            raise ValueError("Use MedianMonitor for the tick-based paper strategy")
         self.config = config
         self.catalog = catalog or BStockCatalogClient()
         self.feed = feed or BStockMultiTimeframeFeed()
@@ -190,7 +206,12 @@ class BStockEngine:
 
     def evaluate_once(self, *, now: datetime | None = None) -> EngineEvent:
         event = self._evaluate_once(now=now)
-        return replace(event, paper_risk_status=self.state.paper_buy_pause or "ACTIVE") if self.config.mode == "paper" else event
+        if self.config.mode == "paper":
+            account = {name: getattr(self.state, name) for name in ("cash_usdc", "position_quantity",
+                "entry_price", "realized_pnl", "fees_usdc", "paper_daily_entries", "paper_loss_streak")}
+            return replace(event, paper_risk_status=self.state.paper_buy_pause or "ACTIVE",
+                           account_snapshot=account)
+        return event
 
     def _evaluate_once(self, *, now: datetime | None = None) -> EngineEvent:
         asset = self.asset or self.catalog.resolve(self.config.symbol)

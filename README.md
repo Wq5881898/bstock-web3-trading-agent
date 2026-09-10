@@ -46,12 +46,13 @@ it is **not an unattended live-trading release**.
 
 | 模块 / Module | 新增能力 / Added capabilities | 状态 / Status |
 | --- | --- | --- |
-| 桌面监控 / Desktop | 后台单线程评估、等待安全停止、同状态窗口互斥、非阻塞风控弹窗 / Single-worker evaluation, safe-stop waiting, per-state desktop locking and nonmodal risk alerts | 可用 / Available |
+| 桌面监控 / Desktop | 后台单线程评估、等待安全停止、状态窗口互斥、非阻塞风控弹窗、模拟账户及逐笔策略最近100笔成交 / Single-worker evaluation, safe-stop waiting, per-state locking, nonmodal alerts, paper account and latest 100 tick-strategy fills | 可用 / Available |
 | K线页 / Candles | 1m/5m已收盘K线、UTC时间、失败后历史数据标记 / Closed 1m/5m candles, UTC timestamps and historical-data markers after failures | 可用 / Available |
-| 模拟风控 / Paper risk | 日累计净值亏损、连亏次数、每日开仓次数、冷却和持仓成本上限 / Daily equity loss, loss streak, daily entries, cooldown and position cost cap | 桌面MTF EMA可用 / Available for desktop MTF EMA |
-| 参数保存 / Preferences | 保存/读取标的、模式、风控和MTF EMA参数；重启不自动运行 / Save/load symbol, mode, risk and MTF EMA inputs; never auto-start on restore | 可用 / Available |
-| 策略页 / Strategies | MTF EMA默认/自定义参数；运行时锁定，已有持仓拒绝不同参数接管 / Default/custom MTF EMA, locked while running; open positions reject changed settings | 自定义仅模拟 / Custom settings are paper-only |
-| Median | 原逐笔中位数逻辑、连续性校验、SQLite事务模拟账本和重启去重 / Original tick-based Median, continuity checks, transactional SQLite paper ledger and restart deduplication | 离线可测试；桌面未启用 / Offline-testable; desktop disabled |
+| 模拟风控 / Paper risk | 日累计净值亏损、连亏次数、每日开仓次数、冷却和持仓成本上限 / Daily equity loss, loss streak, daily entries, cooldown and position cost cap | MTF、Median、Range模拟可用 / Available in MTF, Median and Range paper modes |
+| 参数保存 / Preferences | 保存/读取标的、模式、风控和MTF/Median/Range参数；重启不自动运行 / Save/load symbol, mode, risk and MTF/Median/Range inputs; never auto-start on restore | v4，可用 / v4, available |
+| 策略页 / Strategies | MTF EMA默认/自定义、逐笔Median、固定Range EMA/Median / Default/custom MTF EMA, tick Median and fixed Range EMA/Median | 全部仅模拟改参 / Editing is paper-only |
+| Median | 公共逐笔分页、SQLite事务模拟账本、重启停买和桌面参数 / Public trade pagination, transactional SQLite paper ledger, restart BUY latch and desktop inputs | 桌面模拟可用；真实行情成交尚待验证 / Desktop paper available; public-market fills remain unverified |
+| Fixed Range | 逐笔构造价格区间bar、EMA/Median、事务恢复及独立桌面参数 / Tick-built price-range bars, EMA/Median, transactional recovery and isolated desktop inputs | 桌面模拟可用；Slope本轮不加入 / Desktop paper available; Slope intentionally deferred |
 | 独立MCP基础 / Standalone MCP foundations | PKCE/state、本机回调、发现协议和固定端点HTTP/SSE / PKCE/state, loopback callback, discovery protocol and pinned HTTP/SSE | 基础模块；授权与账户连接未完成 / Foundations only; authorization/account integration incomplete |
 
 ### 默认模拟风控 / Default Paper Controls
@@ -76,18 +77,20 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**201项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **201 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**256项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **256 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
   transaction rollback and stale-writer rejection tests.
 - 上述为离线/加速验证，不代表长时间真实行情或真实账户验收。<br>
   These are offline/accelerated checks, not sustained real-market or real-account acceptance.
-- **尚未完成**：Median公共逐笔行情与桌面接线、数据缺口受控恢复、Range/Slope/Auto迁移、
+- Median已接公共NVDAB逐笔行情和桌面；两轮读取成功，但数据不新鲜，因此未触发模拟成交。见[Median桌面说明](docs/MEDIAN_DESKTOP.md)。<br>
+  Median public NVDAB feed and desktop are connected; two reads succeeded but stale ticks produced no paper fills. See [Median desktop notes](docs/MEDIAN_DESKTOP.md).
+- **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Slope/Auto迁移、
   独立OAuth Token交换/安全存储、MCP账户核对及无人值守执行验收。<br>
-  **Pending**: Median public trade-feed/UI integration and controlled gap recovery,
-  Range/Slope/Auto migration, standalone OAuth token exchange/secure storage,
+  **Pending**: sustained public-market/fill acceptance, a complete history UI,
+  Slope/Auto migration, standalone OAuth token exchange/secure storage,
   MCP account reconciliation and unattended-execution acceptance.
 
 技术说明 / Technical notes:
@@ -95,6 +98,7 @@ market snapshot and do not trigger additional wallet calls or orders.
 [参数保存 / Preferences](docs/DESKTOP_SETTINGS.md) ·
 [策略编辑 / Strategy editing](docs/STRATEGY_INTEGRATION.md) ·
 [Median事务账本 / Median ledger](docs/MEDIAN_PAPER.md) ·
+[固定Range策略 / Fixed Range strategies](docs/RANGE_DESKTOP.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 
 ## 系统架构 / Architecture
@@ -150,11 +154,10 @@ bstock-engine --symbol NVDAB --mode paper --amount 20 --once
 bstock-desktop
 ```
 
-窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”。选择MTF EMA默认或自定义参数，
-检查金额与风控，再点击启动。Median、Range等待迁移项仍不可选；GUI没有真实下单开关。<br>
+窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”和“账户 / Account”。选择MTF EMA、逐笔Median、固定Range EMA或Range Median，检查金额与风控，再点击启动。各逐笔策略使用独立模拟资金；GUI没有真实下单开关。<br>
 The window has Monitor, Candles and Strategies tabs. Select default/custom MTF EMA,
-review budget/risk inputs, then start. Pending Median/Range entries remain disabled;
-the GUI has no live-order switch.
+tick Median, fixed Range EMA or Range Median, review budget/risk inputs, then start.
+Each tick strategy uses separate simulated funds; the GUI has no live-order switch.
 
 本地合成桌面验收（不连接账户，结果保存在被Git忽略的`runtime/`目录）：<br>
 Local synthetic desktop acceptance (no account connection; output stays in git-ignored `runtime/`):
@@ -236,9 +239,9 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `201 passed`
-- 桌面策略 / Desktop strategy: 可编辑MTF EMA / editable MTF EMA
-- 离线策略模块 / Offline strategy module: 逐笔Median + 事务模拟账本 / tick Median + transactional paper ledger
+- 本地自动化测试 / Local automated tests: `256 passed`
+- 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定Range EMA/Median / editable MTF EMA, tick Median and fixed Range EMA/Median
+- 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance
 - 执行适配器 / Execution adapters:
   - Agent OS MCP 宿主交接 / Agent OS MCP host handoff

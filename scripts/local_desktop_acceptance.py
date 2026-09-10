@@ -42,8 +42,13 @@ def main():
                         price+.8, price-.8, price+.2*math.sin(i), 10))
                 return tuple(result)
             snapshot = MultiTimeframeSnapshot(asset, bars(240, 1), bars(80, 5), now)
+            recent = ({"trade_id": n, "time_ms": int(now.timestamp()*1000), "side": "buy",
+                       "price": "100", "quantity": ".999", "fee": ".1"},)
+            account = {"cash": "900", "quantity": ".999", "entry_cost": "100",
+                       "realized_pnl": "0", "fees": ".1", "entries": 1, "losses": 0}
             return EngineEvent(asset, SignalDecision("hold", "SYNTHETIC_UI_FIXTURE", 100,
-                snapshot.signal_bar_time.isoformat()), "paper", market_snapshot=snapshot)
+                snapshot.signal_bar_time.isoformat()), "paper", market_snapshot=snapshot,
+                account_snapshot=account, recent_fills=recent)
 
     app = QtWidgets.QApplication([])
     window = create_monitor_class(Engine)()
@@ -83,6 +88,25 @@ def main():
             window.strategy_choice.setCurrentIndex(1)
             app.processEvents()
             assert window.grab().save(str(root / "strategies.png"))
+            window.strategy_choice.setCurrentIndex(2)
+            app.processEvents()
+            assert window.grab().save(str(root / "median.png"))
+            window.strategy_choice.setCurrentIndex(3)
+            app.processEvents()
+            assert window.range_inputs["range_bps"].isVisible()
+            assert window.range_inputs["short"].isVisible()
+            assert not window.range_inputs["window"].isVisible()
+            assert window.grab().save(str(root / "range-ema.png"))
+            window.strategy_choice.setCurrentIndex(4)
+            app.processEvents()
+            assert window.range_inputs["window"].isVisible()
+            assert not window.range_inputs["short"].isVisible()
+            assert window.grab().save(str(root / "range-median.png"))
+            window.tabs.setCurrentIndex(3)
+            app.processEvents()
+            assert window.grab().save(str(root / "account.png"))
+            assert window.fill_history.rowCount() == 1
+            assert "qty=.999" in window.account_summary.text()
             result.update(passed=True, **counters, rows=window.table.rowCount(),
                           elapsed_seconds=round(time.monotonic()-started, 2), artifacts=str(root.resolve()))
             finish()

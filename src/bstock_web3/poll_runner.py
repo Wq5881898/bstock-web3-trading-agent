@@ -10,6 +10,7 @@ class PollRunner:
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="bstock-market")
         self.future = None
         self.closed = False
+        self.close_future = None
         self._commands = Queue(maxsize=8)
 
     def _evaluate(self):
@@ -45,5 +46,12 @@ class PollRunner:
         return future  # result/exception handled by the GUI thread
 
     def close(self):
+        if self.closed:
+            return
         self.closed = True
-        self._pool.shutdown(wait=False, cancel_futures=True)
+        def dispose():
+            close = getattr(self._engine, "close", None)
+            if close is not None:
+                close()
+        self.close_future = self._pool.submit(dispose)
+        self._pool.shutdown(wait=False, cancel_futures=False)

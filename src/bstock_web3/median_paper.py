@@ -62,7 +62,7 @@ class MedianLedger:
         return result
 
 
-class MedianPaperSession:
+class TickPaperSession:
     """Single-thread owner; revision checks also reject stale competing writers.
 
     All methods except read-only inspection must run on the owning worker thread.
@@ -70,13 +70,14 @@ class MedianPaperSession:
     """
 
     def __init__(self, path: Path, *, symbol: str, strategy: TickMedianConfig | None = None,
-                 risk: BStockEngineConfig | None = None):
+                 risk: BStockEngineConfig | None = None, stream_type=MedianTickStream):
         self.strategy = strategy or TickMedianConfig()
         self.risk = risk or BStockEngineConfig(symbol=symbol, order_size_usdc=Decimal("100"))
         if self.risk.mode != "paper":
             raise ValueError("Median session is paper-only")
         self.symbol = symbol
-        self.stream = MedianTickStream(symbol, self.strategy)
+        self.stream_type = stream_type
+        self.stream = stream_type(symbol, self.strategy)
         self.ledger = MedianLedger()
         self.revision = 0
         self.identity = {"symbol": symbol, "strategy": asdict(self.strategy), "risk": {
@@ -107,7 +108,7 @@ class MedianPaperSession:
             if not isinstance(payload, dict) or set(payload) != {"version", "identity", "ledger", "stream"} or type(payload["version"]) is not int or payload["version"] != 1 or payload["identity"] != self.identity:
                 raise ValueError("Median session configuration mismatch; restore original settings")
             self.ledger = MedianLedger.restore(payload["ledger"])
-            self.stream = MedianTickStream.restore(payload["stream"], symbol=symbol, config=self.strategy)
+            self.stream = self.stream_type.restore(payload["stream"], symbol=symbol, config=self.strategy)
             if self.stream.recovery_required and not self.ledger.pause:
                 raise ValueError("Recovery marker requires a BUY pause")
             if Decimal(self.ledger.quantity) > 0 and self.stream.next_id is None:
@@ -125,7 +126,7 @@ class MedianPaperSession:
 
     def _copy(self):
         return (MedianLedger.restore(asdict(self.ledger)),
-                MedianTickStream.restore(self.stream.checkpoint(), symbol=self.symbol, config=self.strategy))
+                self.stream_type.restore(self.stream.checkpoint(), symbol=self.symbol, config=self.strategy))
 
     def _write_transaction(self, ledger, stream, fills):
         # No in-memory publication before SQLite commits successfully.
@@ -215,24 +216,51 @@ class MedianPaperSession:
         ledger.pause = ledger.pause or "MANUAL"
         self._commit(ledger, stream)
 
-    def resume_buys(self, *, now_ms: int):
+    def data_error(self):
+        ledger, stream = self._copy()
+        ledger.pause = ledger.pause or "DATA_GAP"
+        stream.recovery_required = True
+        self._commit(ledger, stream)
+
+    def resume_buys(self, *, now_ms: int, reconciled=False):
         """Manual only; no new fill, no baseline/count reset, no automatic restart."""
         if type(now_ms) is not int or now_ms < 0:
             raise ValueError("Invalid observation time")
         ledger, stream = self._copy()
-        ticks = stream.checkpoint()["ticks"]
-        if not ticks or not 0 <= now_ms - ticks[-1]["time_ms"] <= 5000:
+        latest = stream.latest_tick()
+        if latest is None or not 0 <= now_ms - latest["time_ms"] <= 5000:
             raise ValueError("Fresh accepted trade required before resume")
         # Gap recovery requires at least one accepted fresh repair after the failure.
-        if stream.recovery_required:
+        if type(reconciled) is not bool:
+            raise ValueError("Invalid reconciliation flag")
+        if stream.recovery_required and not reconciled:
             raise ValueError("Data recovery needs explicit reconciliation; resume is not available yet")
-        price = Decimal(str(ticks[-1]["price"]))
-        self._risk_check(ledger, price, ticks[-1]["time_ms"])
+        price = Decimal(str(latest["price"]))
+        self._risk_check(ledger, price, latest["time_ms"])
         if Decimal(ledger.baseline) - Decimal(ledger.last_equity) >= self.risk.paper_daily_loss_limit or ledger.entries >= self.risk.paper_max_daily_entries or ledger.pause == "CLOCK_REWIND":
             return False
         ledger.pause, ledger.losses = "", 0
+        stream.recovery_required = False
         self._commit(ledger, stream)
         return True
 
-    def fills(self):
-        return [json.loads(row[0]) for row in self.db.execute("SELECT payload FROM fills ORDER BY trade_id")]
+    def fills(self, *, limit=None):
+        if limit is None:
+            rows = self.db.execute("SELECT payload FROM fills ORDER BY trade_id")
+        else:
+            if type(limit) is not int or not 1 <= limit <= 1000:
+                raise ValueError("Invalid fill history limit")
+            rows = reversed(list(self.db.execute(
+                "SELECT payload FROM fills ORDER BY trade_id DESC LIMIT ?", (limit,))))
+        return [json.loads(row[0]) for row in rows]
+
+
+class MedianPaperSession(TickPaperSession):
+    """Backwards-compatible fixed tick-Median paper session."""
+
+
+class RangePaperSession(TickPaperSession):
+    def __init__(self, path: Path, *, symbol: str, strategy, risk: BStockEngineConfig):
+        from .range_ticks import RangeTickStream
+        super().__init__(path, symbol=symbol, strategy=strategy, risk=risk,
+                         stream_type=RangeTickStream)

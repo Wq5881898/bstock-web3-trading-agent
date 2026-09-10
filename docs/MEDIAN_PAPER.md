@@ -1,6 +1,8 @@
 # Median事务模拟账本 / Transactional Median paper ledger
 
-本轮验证 / Validation: **201 tests passed in 38.40s**; source compilation and whitespace checks passed. No account authorization, real orders or GitHub push. 未授权账户、未执行真实订单、未推送GitHub。
+后续更新 / Follow-up: 公共行情、桌面选择与受控数据恢复已接通，见[Median桌面说明](MEDIAN_DESKTOP.md)。下方是初次事务账本阶段记录，不代表当前界面仍禁用。 / Public feed, desktop selection and controlled data recovery are now integrated; see [Median desktop](MEDIAN_DESKTOP.md). The initial ledger-stage record below is historical.
+
+阶段验证 / Milestone validation: **201 tests passed in 38.40s**; source compilation and whitespace checks passed. No account authorization or real orders. 未授权账户、未执行真实订单。
 
 ## 本轮交付 / Delivered
 

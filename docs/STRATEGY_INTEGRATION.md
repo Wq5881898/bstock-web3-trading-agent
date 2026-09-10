@@ -1,5 +1,7 @@
 # 策略编辑与迁移边界 / Strategy editing and migration boundaries
 
+最新状态 / Latest: Median与固定Range EMA/Median桌面模拟已启用，见[Median公共行情](MEDIAN_DESKTOP.md)及[固定Range策略](RANGE_DESKTOP.md)。Slope与Auto本轮不加入；下方保留迁移过程中的阶段记录。 / Median and fixed Range EMA/Median desktop paper modes are enabled; see [Median public feed](MEDIAN_DESKTOP.md) and [fixed Range strategies](RANGE_DESKTOP.md). Slope and Auto are intentionally deferred; milestone history follows.
+
 MTF编辑阶段验证 / MTF editor verification: 138 tests passed (27.29s); native synthetic desktop acceptance passed 650 attempts / 38 injected failures (18.77s). Strategy-page screenshot inspected. Local evidence: `runtime/desktop-acceptance/1788990536967810400/`. These are accelerated offline checks, not real-market or live-order acceptance.
 
 ## 当前可运行 / Available now
@@ -22,7 +24,7 @@ Paper state stores the actual MTF EMA configuration. Restarting an open position
 
 This guard covers built-in MTF EMA, not arbitrary programmatically injected strategies. Concurrent multi-strategy sessions and a parameter version-history manager are not implemented.
 
-## Median为什么尚未启用 / Why Median remains disabled
+## 历史阶段：Median为何当时未启用 / Historical phase: why Median was initially disabled
 
 已核对相邻开发目录的`strategy/runtime.py`、`app/paper_session.py`以及`docs/desktop-paper-m1.md`：原固定Median以逐笔成交价计算滚动中位数，低于中位数×(1−偏离率)买入，高于中位数×(1+偏离率)卖出。`tp`是中位数偏离门槛，不是持仓收益止盈率。原实现维护逐笔成交ID连续性、预热和断线恢复；当前主仓库以1m收盘K线时间去重，两者不能直接等同。界面将Median、Range/Slope/Auto标记为不可选的待迁移项，没有伪装为已经可交易。
 

@@ -46,6 +46,8 @@ def test_roundtrip_restart_and_duplicate_replay(tmp_path):
         assert Decimal(session.ledger.quantity) == 0
         assert abs(Decimal(session.ledger.cash) - 1000 - Decimal(session.ledger.realized_pnl)) < Decimal("1e-18")
         assert Decimal(session.ledger.fees) > .1
+        assert session.fills(limit=1)[0]["side"] == "sell"
+        with pytest.raises(ValueError): session.fills(limit=True)
     finally:
         session.close()
 
@@ -251,5 +253,7 @@ def test_200_roundtrips_atomic_recovery_and_audit(tmp_path):
         assert Decimal(session.ledger.quantity) == 0
         assert abs(Decimal(session.ledger.cash) - 1000 - Decimal(session.ledger.realized_pnl)) < Decimal("1e-18")
         assert abs(Decimal(session.ledger.realized_pnl) + Decimal(session.ledger.fees)) < Decimal("1e-18")
+        assert len(session.fills(limit=100)) == 100
+        assert session.fills(limit=100)[0]["trade_id"] == records[-100]["trade_id"]
     finally:
         session.close()

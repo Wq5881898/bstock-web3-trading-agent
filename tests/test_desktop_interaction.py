@@ -78,7 +78,7 @@ def test_gui_worker_error_is_reported_and_can_stop(monkeypatch, tmp_path):
         window.toggle()
         pump(app, lambda: "fixture failure" in window.status.text())
         window.toggle()
-        assert window.runner is None
+        pump(app, lambda: window.runner is None)
         assert window.state_lock is None
     finally:
         window.close()
@@ -131,7 +131,10 @@ def test_strategy_editor_validates_before_engine_construction(monkeypatch, tmp_p
         def evaluate_once(self): raise ValueError("fixture complete")
     window = create_monitor_class(Engine)()
     try:
-        assert not window.strategy_choice.model().item(2).isEnabled()
+        assert window.strategy_choice.model().item(2).isEnabled()
+        assert window.strategy_choice.model().item(3).isEnabled()
+        assert window.strategy_choice.model().item(4).isEnabled()
+        assert not window.strategy_choice.model().item(5).isEnabled()
         assert all(not edit.isEnabled() for edit in window.strategy_inputs.values())
         window.strategy_choice.setCurrentIndex(1)
         window.strategy_inputs["entry_short"].setValue(30)
@@ -150,7 +153,128 @@ def test_strategy_editor_validates_before_engine_construction(monkeypatch, tmp_p
         assert calls[0].strategy_config.entry_short == 5
         assert not window.strategy_inputs["entry_short"].isEnabled()
         window.toggle()
-        assert window.strategy_inputs["entry_short"].isEnabled()
+        pump(QtWidgets.QApplication.instance(), lambda: window.strategy_inputs["entry_short"].isEnabled())
+    finally:
+        window.close()
+
+
+def test_median_gui_persists_selection_displays_fill_and_closes_on_worker(monkeypatch, tmp_path):
+    from threading import get_ident
+    from bstock_web3.median_monitor import MedianMonitor
+    from bstock_web3.catalog import BStockAsset
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    ids, configs = [], []
+    now = 1788955200
+    class Catalog:
+        def resolve(self, symbol): return BStockAsset("NVDA", "NVDAB", "fixture", "56", "NVDABUSDT", "1")
+        def market_status(self, asset): return SimpleNamespace(open_state=True, reason_code="TRADING")
+    class Trades:
+        def fetch(self, symbol, *, from_id, limit):
+            return [{"a":i, "T":now*1000, "p":"100" if from_id is None else "95", "q":"1"}
+                    for i in (range(3) if from_id is None else [from_id])]
+        def close(self): ids.append(get_ident())
+    class Candles:
+        def fetch(self, asset): raise ValueError("no chart fixture")
+    def factory(config):
+        configs.append(config)
+        ids.append(get_ident())
+        return MedianMonitor(config, catalog=Catalog(), trades=Trades(), candles=Candles(), clock=lambda:now)
+    monitor = create_monitor_class(factory)
+    window = monitor()
+    app = QtWidgets.QApplication.instance()
+    try:
+        window.strategy_choice.setCurrentIndex(2)
+        window.median_inputs["window"].setValue(3)
+        window.save_inputs()
+        window.toggle()
+        pump(app, lambda: window.table.rowCount() == 1)
+        assert configs[0].strategy_kind == "median"
+        assert configs[0].state_file.name == "nvdab_paper_median.sqlite"
+        assert not window.median_inputs["window"].isEnabled()
+        window.poll()
+        pump(app, lambda: window.table.rowCount() == 3)
+        assert window.table.item(1,1).text() == "buy"
+        assert "qty=" in window.account_summary.text()
+        assert window.fill_history.rowCount() == 1
+        assert window.fill_history.item(0, 2).text() == "buy"
+        assert "数量/qty=" in window.account_summary.text()
+        window.toggle()
+        pump(app, lambda: window.runner is None)
+        assert ids[0] == ids[-1] != get_ident()
+        assert window.state_lock is None
+    finally:
+        window.close()
+    restored = monitor()
+    try:
+        assert restored.strategy_choice.currentIndex() == 2
+        assert restored.median_inputs["window"].value() == 3
+        assert restored.runner is None
+    finally:
+        restored.close()
+
+
+def test_range_gui_builds_separate_ema_and_median_sessions(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    configs = []
+    class Engine:
+        def __init__(self, config): configs.append(config)
+        def evaluate_once(self): raise ValueError("fixture complete")
+    window = create_monitor_class(Engine)()
+    app = QtWidgets.QApplication.instance()
+    try:
+        window.strategy_choice.setCurrentIndex(3)
+        window.range_inputs["range_bps"].setCurrentText("50")
+        window.range_inputs["short"].setValue(5)
+        window.range_inputs["long"].setValue(13)
+        window.toggle()
+        pump(app, lambda: "fixture complete" in window.status.text())
+        assert configs[-1].strategy_kind == "range-ema"
+        assert configs[-1].range_config.range_bps == 50
+        assert configs[-1].range_config.short == 5
+        assert configs[-1].state_file.name == "nvdab_paper_range_ema.sqlite"
+        window.toggle()
+        pump(app, lambda: window.runner is None)
+        window.strategy_choice.setCurrentIndex(4)
+        window.range_inputs["window"].setCurrentText("30")
+        window.range_inputs["deviation"].setValue(.004)
+        window.save_inputs()
+        window.toggle()
+        pump(app, lambda: "fixture complete" in window.status.text())
+        assert configs[-1].strategy_kind == "range-median"
+        assert configs[-1].range_config.window == 30
+        assert configs[-1].range_config.deviation == .004
+        assert configs[-1].state_file.name == "nvdab_paper_range_median.sqlite"
+        window.toggle()
+        pump(app, lambda: window.runner is None)
+    finally:
+        window.close()
+    restored = create_monitor_class(Engine)()
+    try:
+        assert restored.strategy_choice.currentIndex() == 4
+        assert restored.range_inputs["window"].currentText() == "30"
+    finally:
+        restored.close()
+
+
+def test_new_session_clears_prior_account_view(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    class Engine:
+        def __init__(self, config): pass
+        def evaluate_once(self):
+            return SimpleNamespace(signal=SignalDecision("hold", "fixture", 100, "fixture"),
+                plan=None, paper_fill=None, mode="quote", account_snapshot=None, recent_fills=())
+    window = create_monitor_class(Engine)()
+    app = QtWidgets.QApplication.instance()
+    try:
+        window.account_summary.setText("OLD LEDGER")
+        window.fill_history.setRowCount(1)
+        window.toggle()
+        assert "Waiting" in window.account_summary.text()
+        assert window.fill_history.rowCount() == 0
+        pump(app, lambda: window.table.rowCount() == 1)
+        assert "OLD LEDGER" not in window.account_summary.text()
+        window.toggle()
+        pump(app, lambda: window.runner is None)
     finally:
         window.close()
 
