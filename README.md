@@ -106,6 +106,7 @@ market snapshot and do not trigger additional wallet calls or orders.
 [Median事务账本 / Median ledger](docs/MEDIAN_PAPER.md) ·
 [固定Range策略 / Fixed Range strategies](docs/RANGE_DESKTOP.md) ·
 [统一策略架构 / Unified strategy architecture](docs/UNIFIED_STRATEGY_ARCHITECTURE.md) ·
+[回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 
 ## 系统架构 / Architecture
