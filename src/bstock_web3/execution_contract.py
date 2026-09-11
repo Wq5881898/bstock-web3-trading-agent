@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from .strategy import SignalDecision
+from .strategy_registry import ensure_strategy_supports
 
 
 class ProductType(StrEnum):
@@ -64,6 +65,9 @@ def order_intent(decision: SignalDecision, instrument: ExecutionInstrument) -> O
         return None
     if decision.price is None:
         raise ValueError("Executable strategy decision requires a price")
+    if not decision.strategy_id:
+        raise ValueError("Executable strategy decision requires a registered strategy_id")
+    ensure_strategy_supports(decision.strategy_id, instrument.product)
     price = Decimal(str(decision.price))
     if not price.is_finite() or price <= 0:
         raise ValueError("Invalid strategy reference price")

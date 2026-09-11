@@ -12,7 +12,9 @@ from bstock_web3.regime import (EntryGuard, GuardAction, MarketRegimeDetector,
 from bstock_web3.range_ticks import RangeStrategyConfig
 from bstock_web3.strategy import MtfEmaConfig, PositionView
 from bstock_web3.strategy_contract import CandleMarketInput, TradeMarketInput
-from bstock_web3.strategy_registry import build_strategy_runtime, strategy_ids, strategy_spec
+from bstock_web3.strategy_registry import (ALL_PRODUCT_TAGS, StrategySpec,
+    build_strategy_runtime, compatible_strategy_ids, ensure_strategy_supports,
+    strategy_ids, strategy_spec)
 
 
 def snapshot(count=80, *, falling=False):
@@ -50,6 +52,23 @@ def test_every_tick_strategy_builds_through_the_same_contract():
         result = runtime.evaluate(TradeMarketInput([
             {"a":1,"T":1788955200000,"p":"100","q":"1"}], 1788955200000))[0]
         assert result.strategy_id == strategy_id and result.source_id == 1
+
+
+def test_strategy_product_tags_are_registry_metadata_not_execution_copies():
+    assert set(compatible_strategy_ids("SPOT")) == set(strategy_ids())
+    assert set(compatible_strategy_ids("WEB3_SPOT")) == set(strategy_ids())
+    assert set(compatible_strategy_ids("FUTURES")) == set(strategy_ids())
+    assert all(spec.supported_products == ALL_PRODUCT_TAGS for spec in
+        (strategy_spec(strategy_id) for strategy_id in strategy_ids()))
+    futures_only = StrategySpec("funding-carry", "candles", "config", "Funding carry",
+        supported_products=frozenset({"FUTURES"}))
+    assert futures_only.supports("FUTURES") and not futures_only.supports("SPOT")
+    ensure_strategy_supports("mtf", "SPOT")
+    with pytest.raises(ValueError):
+        compatible_strategy_ids("OPTIONS")
+    with pytest.raises(ValueError, match="product tags"):
+        StrategySpec("bad", "candles", "config", "Bad",
+            supported_products=frozenset({"OPTIONS"}))
 
 
 def test_regime_detector_is_causal_stateful_and_checkpointed():

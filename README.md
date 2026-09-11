@@ -39,6 +39,8 @@
   Atomic pending-order journaling and restart reconciliation.
 - 全部策略使用统一输入/输出契约和单一注册表；Spot、Web3和未来Futures只实现执行适配器。<br>
   Every strategy uses one input/output contract and registry; Spot, Web3 and future Futures support only add execution adapters.
+- 策略注册信息包含`SPOT`、`WEB3_SPOT`、`FUTURES`产品标签，策略模块集合可直接安装或整体复制到其他Python程序复用。<br>
+  Registry metadata includes `SPOT`, `WEB3_SPOT` and `FUTURES` product tags; the unified strategy module set can be installed or copied as a whole into another Python application.
 
 ## 本轮新增功能 / Latest Development Update
 
@@ -79,8 +81,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**274项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **274 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**276项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **276 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -251,7 +253,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `274 passed`
+- 本地自动化测试 / Local automated tests: `276 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

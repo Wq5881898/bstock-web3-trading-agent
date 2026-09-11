@@ -4,9 +4,6 @@ from dataclasses import dataclass, field
 import math
 from typing import Literal
 
-from .market_data import MultiTimeframeSnapshot
-from .models import Kline
-
 
 SignalAction = Literal["buy", "sell", "hold"]
 
@@ -66,7 +63,7 @@ class MtfEmaStrategy:
     def __init__(self, config: MtfEmaConfig | None = None) -> None:
         self.config = config or MtfEmaConfig()
 
-    def evaluate(self, snapshot: MultiTimeframeSnapshot,
+    def evaluate(self, snapshot: object,
                  position: PositionView | None = None) -> SignalDecision:
         position = position or PositionView()
         signal_time = snapshot.signal_bar_time.isoformat() if snapshot.signal_bar_time else None
@@ -121,7 +118,7 @@ def ema_series(values: list[float], span: int) -> list[float]:
     return result
 
 
-def atr(bars: tuple[Kline, ...], period: int) -> float:
+def atr(bars: tuple[object, ...], period: int) -> float:
     rows = bars[-(period + 1):]
     ranges = [max(current.high - current.low, abs(current.high - previous.close),
                   abs(current.low - previous.close))

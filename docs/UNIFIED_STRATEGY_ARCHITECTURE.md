@@ -6,6 +6,18 @@
 
 Every strategy is implemented once. MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range are registered in `strategy_registry.py`. Through `strategy_contract.py`, they consume normalized market input and emit `StrategyEvaluation`. A strategy does not know whether execution will use Binance Spot, Agent OS MCP, Agentic Wallet or a future derivatives adapter.
 
+## 可移植策略库 / Portable strategy library
+
+策略核心没有HTTP、MCP、钱包、数据库或桌面依赖。其他Python程序可直接安装本包，或连同包目录复制以下统一策略模块：`strategy.py`、`strategy_contract.py`、`strategy_registry.py`、`median_ticks.py`、`range_ticks.py`、`range_guard.py`、`range_auto.py`、`regime.py`。宿主程序只需提供规范化的K线快照或aggTrade行，并从统一运行时读取`StrategyEvaluation`。推荐安装包或复制整个策略模块集合，不要只复制某个具体策略文件，以免重新产生分叉。
+
+The strategy core has no HTTP, MCP, wallet, database or desktop dependency. Another Python application can install this package, or copy the unified strategy module set together: `strategy.py`, `strategy_contract.py`, `strategy_registry.py`, `median_ticks.py`, `range_ticks.py`, `range_guard.py`, `range_auto.py` and `regime.py`. The host supplies normalized candle snapshots or aggregate-trade rows and consumes `StrategyEvaluation`. Install the package or copy the complete strategy set; do not fork an individual strategy file.
+
+## 产品标签 / Product tags
+
+每个`StrategySpec`都带有`supported_products`，可使用`SPOT`、`WEB3_SPOT`、`FUTURES`任意组合。`compatible_strategy_ids()`用于界面筛选，`ensure_strategy_supports()`在生成执行意图前做强制校验。当前9个策略只使用价格/成交/K线并采用long/flat语义，因此都标记兼容三类产品；真实产品能否下单仍由对应执行适配器和授权决定。未来依赖资金费率、做空或合约持仓的策略应只标记`FUTURES`，无需复制注册表或执行器。
+
+Every `StrategySpec` has `supported_products`, containing any combination of `SPOT`, `WEB3_SPOT` and `FUTURES`. `compatible_strategy_ids()` filters user interfaces, while `ensure_strategy_supports()` enforces compatibility before an execution intent is created. All nine current strategies use only price/trade/candle inputs and long/flat semantics, so they are tagged for all three products; actual order availability still depends on the corresponding adapter and authorization. A future strategy that requires funding, shorts or derivatives positions should be tagged `FUTURES` only, without cloning the registry or executor.
+
 ```text
 公共行情 / Market data
   ├─ 已收盘K线 / closed candles

@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from bstock_web3.execution_contract import (ExecutionInstrument, PositionAction,
     ProductType, order_intent)
 from bstock_web3.strategy import SignalDecision
@@ -22,3 +24,9 @@ def test_sell_is_reduce_only_and_hold_has_no_execution_intent():
     intent = order_intent(SignalDecision("sell", "exit", 99, "x", strategy_id="mtf"), instrument)
     assert intent.action == PositionAction.CLOSE_LONG and intent.reduce_only
     assert order_intent(SignalDecision("hold", "wait", None, None), instrument) is None
+
+
+def test_executable_decision_must_identify_a_registered_strategy():
+    instrument = ExecutionInstrument("BTCUSDT", ProductType.SPOT, "BINANCE", "BTC", "USDT")
+    with pytest.raises(ValueError, match="registered strategy_id"):
+        order_intent(SignalDecision("buy", "entry", 100, "x"), instrument)
