@@ -150,4 +150,3 @@ def assert_compatible(definition: StrategyDefinition, *, market, product) -> Non
         raise ValueError(
             f"{definition.strategy_type} does not support {market.value}/{product.value}"
         )
-

@@ -210,4 +210,3 @@ src/alpha2/strategy/
 - 不启用Futures真实交易；
 - 不重写策略公式或趁重构调参；
 - 不清理Alpha2脏工作树。
-
