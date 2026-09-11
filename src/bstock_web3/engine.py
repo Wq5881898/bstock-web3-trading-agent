@@ -17,6 +17,8 @@ from .median_ticks import TickMedianConfig
 from .range_ticks import RangeStrategyConfig
 from .range_guard import GuardedRangeMedianConfig
 from .range_auto import RangeAutoConfig, RangeMedianAdaptiveConfig
+from .strategy_contract import CandleMarketInput, CandleStrategyRuntime
+from .strategy_registry import strategy_ids, strategy_spec
 from .wallet import AgenticWalletCli, USDC_BSC, WalletOrderResult, WalletQuote
 
 
@@ -78,10 +80,9 @@ class BStockEngineConfig:
     range_adaptive_config: RangeMedianAdaptiveConfig = field(default_factory=RangeMedianAdaptiveConfig)
 
     def __post_init__(self) -> None:
-        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median", "range-median-guarded",
-                "range-ema-guarded", "range-auto", "range-guarded-auto", "range-median-adaptive") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig) or not isinstance(self.guarded_range_config, GuardedRangeMedianConfig) or not isinstance(self.range_auto_config, RangeAutoConfig) or not isinstance(self.range_adaptive_config, RangeMedianAdaptiveConfig):
+        if self.strategy_kind not in strategy_ids() or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig) or not isinstance(self.guarded_range_config, GuardedRangeMedianConfig) or not isinstance(self.range_auto_config, RangeAutoConfig) or not isinstance(self.range_adaptive_config, RangeMedianAdaptiveConfig):
             raise ValueError("Invalid strategy selection")
-        if self.strategy_kind != "mtf" and self.mode != "paper":
+        if strategy_spec(self.strategy_kind).input_kind != "candles" and self.mode != "paper":
             raise ValueError("Tick/Range strategies are paper-only")
         if ((self.strategy_kind in ("range-ema", "range-ema-guarded") and self.range_config.family != "ema") or
                 (self.strategy_kind == "range-median" and self.range_config.family != "median")):
@@ -156,6 +157,7 @@ class BStockEngine:
         self.catalog = catalog or BStockCatalogClient()
         self.feed = feed or BStockMultiTimeframeFeed()
         self.strategy = strategy or MtfEmaStrategy(config.strategy_config)
+        self.strategy_runtime = CandleStrategyRuntime("mtf", self.strategy)
         self.wallet = wallet or AgenticWalletCli()
         self.asset: BStockAsset | None = None
         self.state = self._load_state()
@@ -242,7 +244,7 @@ class BStockEngine:
             return EngineEvent(asset, SignalDecision(
                 "hold", "signal_bar_already_processed", None, signal_bar
             ), self.config.mode, market_snapshot=snapshot)
-        decision = self.strategy.evaluate(snapshot, self.state.position)
+        decision = self.strategy_runtime.evaluate(CandleMarketInput(snapshot), self.state.position)[0].decision(self.state.position)
         if self.config.mode == "paper" and decision.action == "buy" and self.state.paper_buy_pause:
             decision = replace(decision, action="hold", reason="paper_buys_paused:" + self.state.paper_buy_pause)
         if self.config.mode == "paper" and decision.action == "buy" and self.state.paper_last_entry_at:

@@ -37,6 +37,8 @@
   duplicate confirmations, pending orders, corrupted state and incomplete candles.
 - 未决订单原子化记录，并支持进程重启后的订单状态恢复。<br>
   Atomic pending-order journaling and restart reconciliation.
+- 全部策略使用统一输入/输出契约和单一注册表；Spot、Web3和未来Futures只实现执行适配器。<br>
+  Every strategy uses one input/output contract and registry; Spot, Web3 and future Futures support only add execution adapters.
 
 ## 本轮新增功能 / Latest Development Update
 
@@ -77,8 +79,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**268项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **268 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**274项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **274 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -101,6 +103,7 @@ market snapshot and do not trigger additional wallet calls or orders.
 [策略编辑 / Strategy editing](docs/STRATEGY_INTEGRATION.md) ·
 [Median事务账本 / Median ledger](docs/MEDIAN_PAPER.md) ·
 [固定Range策略 / Fixed Range strategies](docs/RANGE_DESKTOP.md) ·
+[统一策略架构 / Unified strategy architecture](docs/UNIFIED_STRATEGY_ARCHITECTURE.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 
 ## 系统架构 / Architecture
@@ -248,7 +251,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `268 passed`
+- 本地自动化测试 / Local automated tests: `274 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

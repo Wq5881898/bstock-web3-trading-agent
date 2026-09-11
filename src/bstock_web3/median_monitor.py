@@ -6,9 +6,10 @@ import time
 from .aggregate_provider import AggregateTradeProvider
 from .catalog import BStockCatalogClient
 from .market_data import BStockMultiTimeframeFeed
-from .median_paper import MedianPaperSession, RangePaperSession
+from .median_paper import StrategyPaperSession
 from .strategy import SignalDecision
 from .range_guard import GuardedRangeMedianConfig, minute_guard_context
+from .strategy_registry import strategy_config
 
 
 @dataclass(frozen=True)
@@ -63,22 +64,8 @@ class MedianMonitor:
         if self.asset is None:
             self.asset = self.catalog.resolve(self.config.symbol)
         if self.session is None:
-            if self.config.strategy_kind == "median":
-                self.session = MedianPaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
-                    strategy=self.config.median_config, risk=self.config)
-            elif self.config.strategy_kind.startswith("range-"):
-                if self.config.strategy_kind in ("range-auto", "range-guarded-auto"):
-                    strategy = self.config.range_auto_config
-                elif self.config.strategy_kind == "range-median-adaptive":
-                    strategy = self.config.range_adaptive_config
-                elif self.config.strategy_kind == "range-median-guarded":
-                    strategy = self.config.guarded_range_config
-                else:
-                    strategy = self.config.range_config
-                self.session = RangePaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
-                    strategy=strategy, risk=self.config)
-            else:
-                raise ValueError("Unsupported tick strategy")
+            self.session = StrategyPaperSession(self.config.state_file,
+                symbol=self.asset.spot_symbol, strategy=strategy_config(self.config), risk=self.config)
             if self.session.stream.recovery_required:
                 self._recovery_cursor = self.session.stream.next_id
             if self.session.stream.next_id is not None or self._pause:
@@ -103,6 +90,7 @@ class MedianMonitor:
                 self._snapshot = self.candles.fetch(self.asset)
                 self._last_chart = self.clock()
                 context = minute_guard_context(self._snapshot)
+                context["_snapshot"] = self._snapshot
             except Exception:
                 context = {}
         try:

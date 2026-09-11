@@ -13,6 +13,7 @@ from .median_ticks import TickMedianConfig
 from .range_ticks import RangeStrategyConfig
 from .range_guard import GuardedRangeMedianConfig
 from .range_auto import RangeAutoConfig, RangeMedianAdaptiveConfig
+from .strategy_registry import strategy_ids, strategy_spec
 
 
 @dataclass(frozen=True)
@@ -37,8 +38,7 @@ class DesktopPreferences:
     def __post_init__(self):
         if type(self.version) is not int or self.version != 6:
             raise ValueError("Unsupported preferences version")
-        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median", "range-median-guarded",
-                "range-ema-guarded", "range-auto", "range-guarded-auto", "range-median-adaptive") or (self.strategy_kind != "mtf" and self.mode != "paper"):
+        if self.strategy_kind not in strategy_ids() or (strategy_spec(self.strategy_kind).input_kind != "candles" and self.mode != "paper"):
             raise ValueError("Invalid strategy or non-paper Median")
         if not isinstance(self.median_config, dict) or set(self.median_config) != set(asdict(TickMedianConfig())):
             raise ValueError("Invalid Median fields")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from typing import Literal
 
@@ -58,6 +58,8 @@ class SignalDecision:
     signal_bar_time: str | None
     trend_spread: float | None = None
     expected_edge: float | None = None
+    strategy_id: str = ""
+    strategy_params: dict = field(default_factory=dict)
 
 
 class MtfEmaStrategy:

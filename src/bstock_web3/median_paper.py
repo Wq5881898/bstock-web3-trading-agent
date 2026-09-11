@@ -10,6 +10,8 @@ import sqlite3
 
 from .engine import BStockEngineConfig
 from .median_ticks import MedianTickStream, TickMedianConfig
+from .strategy import PositionView
+from .strategy_contract import TradeMarketInput, evaluate_tick_stream
 
 
 @dataclass
@@ -83,14 +85,16 @@ class TickPaperSession:
     """
 
     def __init__(self, path: Path, *, symbol: str, strategy: TickMedianConfig | None = None,
-                 risk: BStockEngineConfig | None = None, stream_type=MedianTickStream):
+                 risk: BStockEngineConfig | None = None, stream_type=MedianTickStream,
+                 stream=None, strategy_id=None):
         self.strategy = strategy or TickMedianConfig()
         self.risk = risk or BStockEngineConfig(symbol=symbol, order_size_usdc=Decimal("100"))
         if self.risk.mode != "paper":
             raise ValueError("Median session is paper-only")
         self.symbol = symbol
+        self.strategy_id = strategy_id or self.risk.strategy_kind
         self.stream_type = stream_type
-        self.stream = stream_type(symbol, self.strategy)
+        self.stream = stream if stream is not None else stream_type(symbol, self.strategy)
         self.ledger = MedianLedger()
         self.revision = 0
         self.identity = {"symbol": symbol, "strategy": json.loads(json.dumps(asdict(self.strategy), allow_nan=False)), "risk": {
@@ -186,7 +190,9 @@ class TickPaperSession:
     def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
         ledger, stream = self._copy()
         try:
-            observations = stream.accept_page(rows, now_ms=now_ms, warmup=warmup, context=context,
+            observations = evaluate_tick_stream(self.strategy_id, stream,
+                TradeMarketInput(rows, now_ms, warmup, context),
+                position=PositionView(float(ledger.quantity), float(ledger.entry_price)),
                 locked_strategy_params=ledger.entry_strategy_params if Decimal(ledger.quantity) > 0 else None)
         except ValueError:
             ledger.pause = ledger.pause or "DATA_GAP"
@@ -196,8 +202,9 @@ class TickPaperSession:
         for point in observations:
             if not point.fresh:
                 continue
-            tick, price = point.tick, Decimal(str(point.tick.price))
-            self._risk_check(ledger, price, tick.time_ms)
+            price = Decimal(str(point.price))
+            time_ms, trade_id = point.observed_ms, point.source_id
+            self._risk_check(ledger, price, time_ms)
             quantity = Decimal(ledger.quantity)
             side = ""
             exit_reason = "strategy"
@@ -224,14 +231,14 @@ class TickPaperSession:
                 cooldown = int(ledger.entry_strategy_params.get("stop_loss_cooldown_seconds", 0))
                 ledger.quantity, ledger.entry_cost, ledger.entry_price = "0", "0", "0"
                 ledger.entry_strategy_params = {}
-                ledger.last_sell_ms, ledger.last_sell_reason = tick.time_ms, exit_reason
+                ledger.last_sell_ms, ledger.last_sell_reason = time_ms, exit_reason
                 ledger.stop_loss_cooldown_seconds = cooldown if exit_reason != "strategy" else 0
                 side = "sell"
             elif quantity == 0 and point.buy and not ledger.pause:
-                if ledger.last_entry_ms is not None and tick.time_ms - ledger.last_entry_ms < self.risk.paper_entry_cooldown * 1000:
+                if ledger.last_entry_ms is not None and time_ms - ledger.last_entry_ms < self.risk.paper_entry_cooldown * 1000:
                     continue
                 if (ledger.last_sell_ms is not None and ledger.last_sell_reason != "strategy" and
-                        tick.time_ms - ledger.last_sell_ms < ledger.stop_loss_cooldown_seconds * 1000):
+                        time_ms - ledger.last_sell_ms < ledger.stop_loss_cooldown_seconds * 1000):
                     continue
                 spend = min(self.risk.order_size_usdc, Decimal(ledger.cash))
                 if spend <= 0:
@@ -244,14 +251,14 @@ class TickPaperSession:
                 ledger.quantity, ledger.entry_cost, ledger.entry_price = str(quantity), str(spend), str(price)
                 ledger.entry_strategy_params = dict(getattr(point, "strategy_params", None) or {})
                 ledger.entries += 1
-                ledger.last_entry_ms = tick.time_ms
+                ledger.last_entry_ms = time_ms
                 side = "buy"
             if side:
                 ledger.fees = str(Decimal(ledger.fees) + fee)
-                fills.append({"trade_id": tick.trade_id, "time_ms": tick.time_ms, "side": side,
+                fills.append({"trade_id": trade_id, "time_ms": time_ms, "side": side,
                               "price": str(price), "quantity": str(quantity), "fee": str(fee),
                               "reason": exit_reason if side == "sell" else point.reason})
-                self._risk_check(ledger, price, tick.time_ms)
+                self._risk_check(ledger, price, time_ms)
         if observations:
             self._commit(ledger, stream, fills)
         return fills
@@ -300,25 +307,22 @@ class TickPaperSession:
         return [json.loads(row[0]) for row in rows]
 
 
-class MedianPaperSession(TickPaperSession):
-    """Backwards-compatible fixed tick-Median paper session."""
-
-
-class RangePaperSession(TickPaperSession):
+class StrategyPaperSession(TickPaperSession):
+    """One transactional paper session for every aggregate-trade strategy."""
     def __init__(self, path: Path, *, symbol: str, strategy, risk: BStockEngineConfig):
-        from .range_guard import GuardedRangeMedianConfig, GuardedRangeMedianStream
-        from .range_ticks import RangeTickStream
-        from .range_auto import (GuardedRangeAutoStream, GuardedRangeEmaStream,
-            RangeAutoConfig, RangeAutoStream, RangeMedianAdaptiveConfig, RangeMedianAdaptiveStream)
-        if isinstance(strategy, GuardedRangeMedianConfig):
-            stream_type = GuardedRangeMedianStream
-        elif isinstance(strategy, RangeMedianAdaptiveConfig):
-            stream_type = RangeMedianAdaptiveStream
-        elif isinstance(strategy, RangeAutoConfig):
-            stream_type = GuardedRangeAutoStream if risk.strategy_kind == "range-guarded-auto" else RangeAutoStream
-        elif risk.strategy_kind == "range-ema-guarded":
-            stream_type = GuardedRangeEmaStream
-        else:
-            stream_type = RangeTickStream
+        from .strategy_registry import build_strategy_runtime
+        runtime = build_strategy_runtime(risk, symbol)
         super().__init__(path, symbol=symbol, strategy=strategy, risk=risk,
-                         stream_type=stream_type)
+            stream_type=type(runtime.stream), stream=runtime.stream,
+            strategy_id=runtime.strategy_id)
+
+
+class MedianPaperSession(StrategyPaperSession):
+    """Compatibility name for callers that previously selected Median directly."""
+    def __init__(self, path: Path, *, symbol: str, strategy, risk: BStockEngineConfig | None = None):
+        TickPaperSession.__init__(self, path, symbol=symbol, strategy=strategy, risk=risk,
+            stream_type=MedianTickStream, strategy_id="median")
+
+
+class RangePaperSession(StrategyPaperSession):
+    """Compatibility name for callers that previously selected Range directly."""

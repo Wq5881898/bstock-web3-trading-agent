@@ -6,6 +6,7 @@ import json
 import math
 
 from .range_ticks import RANGE_BPS, RANGE_MEDIAN_WINDOWS, RangeStrategyConfig, RangeTickStream
+from .regime import EntryGuard, EntryGuardConfig, GuardAction, MarketRegimeDetector
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,7 @@ class GuardedRangeStream:
         self.guard_config = guard_config or RangeEntryGuardConfig()
         self.base = base_type(symbol, base_config)
         self.recent_ticks = ()
+        self.regime_detector = MarketRegimeDetector()
 
     @property
     def next_id(self): return self.base.next_id
@@ -220,7 +222,9 @@ class GuardedRangeStream:
             staged.recent_ticks = tuple((ms, price) for ms, price in
                 (*staged.recent_ticks, (point.tick.time_ms, point.tick.price))
                 if point.tick.time_ms - ms <= 120000)
-            blocked = staged._blocked(context or {}, point.tick.time_ms, point.tick.price)
+            snapshot = (context or {}).get("_snapshot")
+            regime = staged.regime_detector.evaluate(snapshot) if snapshot is not None else None
+            blocked = staged._blocked(context or {}, point.tick.time_ms, point.tick.price, regime)
             buy, reason = point.buy, point.reason
             if buy and blocked:
                 buy, reason = False, "entry_blocked:" + blocked
@@ -229,13 +233,15 @@ class GuardedRangeStream:
         self.__dict__.update(staged.__dict__)
         return tuple(result)
 
-    def _blocked(self, context, now_ms, price):
-        for seconds, threshold in ((30, self.guard_config.fast_drop_30s), (120, self.guard_config.fast_drop_2m)):
-            candidates = [(ms,p) for ms,p in self.recent_ticks if ms <= now_ms-seconds*1000]
-            if candidates:
-                prior = candidates[-1][1]
-                if price / prior - 1 <= threshold:
-                    return f"fast_drop_{seconds}s"
+    def _blocked(self, context, now_ms, price, regime):
+        guard = EntryGuard(EntryGuardConfig(self.guard_config.fast_drop_30s,
+            self.guard_config.fast_drop_2m))
+        result = guard.evaluate(price=price, now_ms=now_ms, regime=regime,
+            ticks=self.recent_ticks)
+        if result.action == GuardAction.BLOCK:
+            return ",".join(result.reasons)
+        if regime is not None:
+            return ""
         s, l = self.guard_config.trend_short, self.guard_config.trend_long
         try:
             if (float(context[f"minute_ema_{s}"]) < float(context[f"minute_ema_{l}"]) and
@@ -247,15 +253,18 @@ class GuardedRangeStream:
         return ""
 
     def checkpoint(self):
-        return {"version": 1, "symbol": self.symbol, "config": _config_payload(self.config),
+        return {"version": 2, "symbol": self.symbol, "config": _config_payload(self.config),
             "guard_config": asdict(self.guard_config), "recent_ticks": [list(v) for v in self.recent_ticks],
+            "regime": self.regime_detector.checkpoint(),
             "base": self.base.checkpoint()}
 
     @classmethod
     def restore(cls, payload, *, symbol, config, base_type=RangeTickStream, guard_config=None):
         guard_config = guard_config or RangeEntryGuardConfig()
-        if (not isinstance(payload, dict) or set(payload) != {"version","symbol","config","guard_config","recent_ticks","base"} or
-                payload["version"] != 1 or payload["symbol"] != symbol or payload["config"] != _config_payload(config) or
+        legacy = isinstance(payload,dict) and payload.get("version") == 1
+        expected = {"version","symbol","config","guard_config","recent_ticks","base"} | (set() if legacy else {"regime"})
+        if (not isinstance(payload, dict) or set(payload) != expected or
+                payload["version"] not in (1,2) or payload["symbol"] != symbol or payload["config"] != _config_payload(config) or
                 payload["guard_config"] != asdict(guard_config) or not isinstance(payload["recent_ticks"], list)):
             raise ValueError("Invalid guarded Range checkpoint")
         instance = cls(symbol, config, base_type=base_type, guard_config=guard_config)
@@ -265,6 +274,8 @@ class GuardedRangeStream:
                not isinstance(v[1],(int,float)) or not math.isfinite(v[1]) or v[1] <= 0 for v in ticks):
             raise ValueError("Invalid guarded Range tick history")
         instance.recent_ticks = ticks
+        if not legacy:
+            instance.regime_detector = MarketRegimeDetector.restore(payload["regime"])
         return instance
 
 

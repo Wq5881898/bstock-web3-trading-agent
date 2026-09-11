@@ -32,6 +32,10 @@ Every page requires contiguous aggregate-trade IDs and nondecreasing timestamps.
 - **Range Median Adaptive:** defaults to 20-bps/window-20/deviation-0.0035 and 30-bps/window-60/deviation-0.004 candidates, selecting the largest `(median−close)/close`; a BUY locks the corresponding fixed Range Median configuration.
 - **Range EMA Guarded / Guarded Auto:** add BUY-only 30-second/2-minute FastDrop checks and a completed-minute EMA15/45 downtrend proxy around fixed EMA or Auto. Strategy exits are never suppressed. If minute context is unavailable, FastDrop remains active but missing regime context alone does not block, matching alpha2's EntryGuard boundary.
 
+所有Range变体与MTF EMA、逐笔Median共享统一`StrategyEvaluation`契约、注册表和执行意图模型。未来增加Futures只需行情/产品/执行适配器，不复制Range策略。Guarded EMA/Auto在真实监控中使用公共Regime状态机；无完整快照的单元输入保留EMA回退路径。
+
+All Range variants share the same `StrategyEvaluation` contract, registry and execution-intent model as MTF EMA and tick Median. Future Futures support needs market/product/execution adapters, not Range copies. Guarded EMA/Auto use the shared Regime state machine during real monitoring, with an EMA fallback for isolated inputs that lack a complete snapshot.
+
 ## 高振幅防御 / High-amplitude guarded Median
 
 防御候选保持alpha2推荐默认：Range20、Median60、偏离0.2%，完成分钟EMA20/50入场守护，`clamp(P90振幅×3, 1%, 5%)`动态止损，并在买入时锁定。EMA20与EMA50连续下行时只封锁新买入；持仓仍保留原Median卖出。价格达到锁定止损后，仅在当前分钟EMA20低于EMA50时退出；止损后冷却900秒。可选的方向回撤门控、confirmed-down模式及更宽灾难止损也保留在配置模型中，但不是默认开启项。
@@ -58,9 +62,9 @@ The Candles tab still displays 1m/5m time candles for observation only; Range si
 
 Automated coverage includes exact multi-bar jumps, volume ownership, EMA/Median signals, warmup/staleness, conflicts/gaps, corrupt checkpoints, abnormal-jump limits, transactional rollback, restart exits, manual resume, desktop persistence and isolated state paths. Native desktop acceptance uses synthetic data without an account. Sustained public-feed observation during an active market remains pending; Range stays paper-only until MCP live execution is separately designed and explicitly authorized.
 
-本轮证据：Python 3.11完整回归268项通过；原生桌面650轮刷新、38次故障注入通过（12.47秒）。固定、防御、Auto和Adaptive页面截图位于被Git忽略的`runtime/desktop-acceptance/1789078484391283800/`。这些数字是本地加速模拟，不是实盘验收。
+本轮证据：Python 3.11完整回归274项通过；原生桌面650轮刷新、38次故障注入通过（13.41秒）。固定、防御、Auto和Adaptive页面截图位于被Git忽略的`runtime/desktop-acceptance/1789101345204910200/`。这些数字是本地加速模拟，不是实盘验收。
 
-Latest validation passed 268 Python 3.11 tests and 650 native-desktop refreshes with 38 injected failures in 12.47 seconds. Fixed, guarded, Auto and Adaptive screenshots are under git-ignored `runtime/desktop-acceptance/1789078484391283800/`. These are accelerated local simulations, not live acceptance.
+Latest validation passed 274 Python 3.11 tests and 650 native-desktop refreshes with 38 injected failures in 13.41 seconds. Fixed, guarded, Auto and Adaptive screenshots are under git-ignored `runtime/desktop-acceptance/1789101345204910200/`. These are accelerated local simulations, not live acceptance.
 
 2026-09-10公共行情复测：Range EMA与Range Median都成功读取NVDAB最新逐笔成交，游标前进、市场状态正常、K线页各返回239根。1000笔初始预热仅形成2根20 bps Range bar，未达到EMA的45根或Median的20根要求，因此0笔模拟成交；这是正常预热，不是放宽门槛的理由。报告位于`runtime/tick-public-smoke/range-ema-1789074677580056400/`和`range-median-1789074690040502200/`。
 

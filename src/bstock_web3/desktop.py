@@ -55,7 +55,9 @@ def create_monitor_class(engine_factory=None):
     from .candle_widget import CandlePanel
     from .median_monitor import MedianMonitor
     if engine_factory is None:
-        engine_factory = lambda config: MedianMonitor(config) if config.strategy_kind != "mtf" else BStockEngine(config)
+        from .strategy_registry import strategy_spec
+        engine_factory = lambda config: (MedianMonitor(config)
+            if strategy_spec(config.strategy_kind).input_kind == "aggregate-trades" else BStockEngine(config))
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -157,6 +159,8 @@ def create_monitor_class(engine_factory=None):
             strategy_scroll.setWidget(strategy_content)
             strategy_page_layout.addWidget(strategy_scroll)
             self.strategy_choice = QtWidgets.QComboBox()
+            from .strategy_registry import strategy_ids
+            self.desktop_strategy_ids = ("mtf", "mtf", *strategy_ids()[1:])
             self.strategy_choice.addItems(["MTF EMA · 默认 / Default", "MTF EMA · 自定义 / Custom",
                 "Median · 逐笔模拟 / Tick paper",
                 "Range EMA · 固定区间模拟 / Fixed range paper",
@@ -355,9 +359,7 @@ def create_monitor_class(engine_factory=None):
             return RangeStrategyConfig(family="median" if index == 4 else "ema", **values)
 
         def selected_strategy_kind(self):
-            return {2: "median", 3: "range-ema", 4: "range-median", 5: "range-median-guarded",
-                6: "range-ema-guarded", 7: "range-auto", 8: "range-guarded-auto",
-                9: "range-median-adaptive"}.get(self.strategy_choice.currentIndex(), "mtf")
+            return self.desktop_strategy_ids[self.strategy_choice.currentIndex()]
 
         def selected_auto_range_config(self):
             values = {key: edit.value() for key, edit in self.auto_range_inputs.items() if key != "ranges_bps"}
@@ -425,10 +427,10 @@ def create_monitor_class(engine_factory=None):
             for key, edit in self.risk_inputs.items():
                 value = getattr(preferences, key)
                 edit.setValue(float(value) if key == "paper_position_cap" else value)
-            self.strategy_choice.setCurrentIndex({"median": 2, "range-ema": 3, "range-median": 4, "range-median-guarded": 5,
-                "range-ema-guarded": 6, "range-auto": 7, "range-guarded-auto": 8,
-                "range-median-adaptive": 9}.get(
-                preferences.strategy_kind, 0 if preferences.strategy_config == asdict(MtfEmaConfig()) else 1))
+            selected = (0 if preferences.strategy_config == asdict(MtfEmaConfig()) else 1)
+            if preferences.strategy_kind != "mtf":
+                selected = self.desktop_strategy_ids.index(preferences.strategy_kind)
+            self.strategy_choice.setCurrentIndex(selected)
             for key, value in preferences.median_config.items():
                 self.median_inputs[key].setValue(value)
             for key, value in preferences.strategy_config.items():
