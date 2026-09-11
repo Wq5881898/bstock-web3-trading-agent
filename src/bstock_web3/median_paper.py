@@ -93,7 +93,7 @@ class TickPaperSession:
         self.stream = stream_type(symbol, self.strategy)
         self.ledger = MedianLedger()
         self.revision = 0
-        self.identity = {"symbol": symbol, "strategy": asdict(self.strategy), "risk": {
+        self.identity = {"symbol": symbol, "strategy": json.loads(json.dumps(asdict(self.strategy), allow_nan=False)), "risk": {
             name: str(getattr(self.risk, name)) for name in ("order_size_usdc", "paper_fee_rate",
                 "paper_daily_loss_limit", "paper_position_cap", "paper_max_daily_entries",
                 "paper_max_loss_streak", "paper_entry_cooldown")}}
@@ -186,7 +186,8 @@ class TickPaperSession:
     def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
         ledger, stream = self._copy()
         try:
-            observations = stream.accept_page(rows, now_ms=now_ms, warmup=warmup, context=context)
+            observations = stream.accept_page(rows, now_ms=now_ms, warmup=warmup, context=context,
+                locked_strategy_params=ledger.entry_strategy_params if Decimal(ledger.quantity) > 0 else None)
         except ValueError:
             ledger.pause = ledger.pause or "DATA_GAP"
             self._commit(ledger, stream)  # persist the latch, but not an invalid page prefix
@@ -307,6 +308,17 @@ class RangePaperSession(TickPaperSession):
     def __init__(self, path: Path, *, symbol: str, strategy, risk: BStockEngineConfig):
         from .range_guard import GuardedRangeMedianConfig, GuardedRangeMedianStream
         from .range_ticks import RangeTickStream
-        stream_type = GuardedRangeMedianStream if isinstance(strategy, GuardedRangeMedianConfig) else RangeTickStream
+        from .range_auto import (GuardedRangeAutoStream, GuardedRangeEmaStream,
+            RangeAutoConfig, RangeAutoStream, RangeMedianAdaptiveConfig, RangeMedianAdaptiveStream)
+        if isinstance(strategy, GuardedRangeMedianConfig):
+            stream_type = GuardedRangeMedianStream
+        elif isinstance(strategy, RangeMedianAdaptiveConfig):
+            stream_type = RangeMedianAdaptiveStream
+        elif isinstance(strategy, RangeAutoConfig):
+            stream_type = GuardedRangeAutoStream if risk.strategy_kind == "range-guarded-auto" else RangeAutoStream
+        elif risk.strategy_kind == "range-ema-guarded":
+            stream_type = GuardedRangeEmaStream
+        else:
+            stream_type = RangeTickStream
         super().__init__(path, symbol=symbol, strategy=strategy, risk=risk,
                          stream_type=stream_type)

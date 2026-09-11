@@ -66,10 +66,17 @@ class MedianMonitor:
             if self.config.strategy_kind == "median":
                 self.session = MedianPaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
                     strategy=self.config.median_config, risk=self.config)
-            elif self.config.strategy_kind in ("range-ema", "range-median", "range-median-guarded"):
+            elif self.config.strategy_kind.startswith("range-"):
+                if self.config.strategy_kind in ("range-auto", "range-guarded-auto"):
+                    strategy = self.config.range_auto_config
+                elif self.config.strategy_kind == "range-median-adaptive":
+                    strategy = self.config.range_adaptive_config
+                elif self.config.strategy_kind == "range-median-guarded":
+                    strategy = self.config.guarded_range_config
+                else:
+                    strategy = self.config.range_config
                 self.session = RangePaperSession(self.config.state_file, symbol=self.asset.spot_symbol,
-                    strategy=(self.config.guarded_range_config if self.config.strategy_kind == "range-median-guarded"
-                              else self.config.range_config), risk=self.config)
+                    strategy=strategy, risk=self.config)
             else:
                 raise ValueError("Unsupported tick strategy")
             if self.session.stream.recovery_required:
@@ -91,7 +98,7 @@ class MedianMonitor:
         fills = []
         caught_up = False
         context = None
-        if self.config.strategy_kind == "range-median-guarded":
+        if self.config.strategy_kind in ("range-median-guarded", "range-ema-guarded", "range-guarded-auto"):
             try:
                 self._snapshot = self.candles.fetch(self.asset)
                 self._last_chart = self.clock()

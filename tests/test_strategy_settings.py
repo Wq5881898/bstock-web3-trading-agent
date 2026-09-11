@@ -17,15 +17,17 @@ def test_legacy_preferences_migrate_in_memory_only(tmp_path):
     data.pop("median_config")
     data.pop("range_config")
     data.pop("guarded_range_config")
+    data.pop("range_auto_config")
+    data.pop("range_adaptive_config")
     data["version"] = 1
     original = json.dumps(data)
     path.write_text(original)
     loaded = load_preferences(path)
-    assert loaded.version == 5
+    assert loaded.version == 6
     assert loaded.strategy_config == asdict(MtfEmaConfig())
     assert path.read_text() == original
     save_preferences(path, loaded)
-    assert json.loads(path.read_text())["version"] == 5
+    assert json.loads(path.read_text())["version"] == 6
 
 
 @pytest.mark.parametrize("changes", [

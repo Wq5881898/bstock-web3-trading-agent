@@ -2,9 +2,9 @@
 
 ## 已接通 / Connected
 
-策略页现在可以选择 **Median · 逐笔模拟 / Tick paper**，编辑窗口（1–100笔）与买入/卖出偏离比例。仅支持paper，不提供真实下单。当前配置v4同时保存MTF、Median及Range参数，兼容完整v1/v2/v3格式；重启窗口不会自动运行。Median不使用MTF的EMA/ATR/止损参数。
+策略页现在可以选择 **Median · 逐笔模拟 / Tick paper**，编辑窗口（1–100笔）与买入/卖出偏离比例。仅支持paper，不提供真实下单。当前配置v6同时保存MTF、Median及固定/防御/Auto/Adaptive Range参数，兼容完整v1至v5格式；重启窗口不会自动运行。Median不使用MTF的EMA/ATR/止损参数。
 
-The Strategies tab now enables **Median · Tick paper**, with a 1–100-trade window and entry/exit deviation fractions. Paper only; no live orders. Preferences v4 stores MTF, Median and Range inputs, reading exact v1/v2/v3 schemas compatibly. Window restart never auto-starts. Median does not use MTF EMA/ATR/stop inputs.
+The Strategies tab now enables **Median · Tick paper**, with a 1–100-trade window and entry/exit deviation fractions. Paper only; no live orders. Preferences v6 stores MTF, Median and fixed/guarded/Auto/Adaptive Range inputs, reading exact v1–v5 schemas compatibly. Window restart never auto-starts. Median does not use MTF EMA/ATR/stop inputs.
 
 选择Median后，使用同运行目录下独立的`<symbol>_paper_median.sqlite`模拟账本和状态锁；不接管MTF仓位，不共享MTF模拟资金。首次本金1000，每个账本分别风控，不能把它当作真实账户级总风险上限。SQLite重开严格核对标的、策略和风控参数；不匹配时恢复原设置，不能自动修改既有账本。
 

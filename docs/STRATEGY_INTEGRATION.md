@@ -26,13 +26,13 @@ This guard covers built-in MTF EMA, not arbitrary programmatically injected stra
 
 ## 历史阶段：Median为何当时未启用 / Historical phase: why Median was initially disabled
 
-已核对相邻开发目录的`strategy/runtime.py`、`app/paper_session.py`以及`docs/desktop-paper-m1.md`：原固定Median以逐笔成交价计算滚动中位数，低于中位数×(1−偏离率)买入，高于中位数×(1+偏离率)卖出。`tp`是中位数偏离门槛，不是持仓收益止盈率。原实现维护逐笔成交ID连续性、预热和断线恢复；当前主仓库以1m收盘K线时间去重，两者不能直接等同。界面将Median、Range/Slope/Auto标记为不可选的待迁移项，没有伪装为已经可交易。
+已核对相邻开发目录的`strategy/runtime.py`、`app/paper_session.py`以及`docs/desktop-paper-m1.md`：原固定Median以逐笔成交价计算滚动中位数，低于中位数×(1−偏离率)买入，高于中位数×(1+偏离率)卖出。`tp`是中位数偏离门槛，不是持仓收益止盈率。当前界面已启用Median以及固定/防御/Auto/Adaptive Range模拟策略；Slope按产品决策保持不加入。
 
-Inspection of the adjacent development tree's `strategy/runtime.py`, `app/paper_session.py` and `docs/desktop-paper-m1.md` confirms that fixed Median uses rolling trade prices: BUY below median × (1 − deviation), SELL above median × (1 + deviation). Its `tp` is a median-deviation threshold, not a position-profit target. The source maintains trade-ID continuity, warmup and reconnect handling; the current repository deduplicates by closed 1m candle time. These are not interchangeable. Median and Range/Slope/Auto are shown as disabled pending entries, not executable strategies.
+Inspection of the adjacent development tree's `strategy/runtime.py`, `app/paper_session.py` and `docs/desktop-paper-m1.md` confirms that fixed Median uses rolling trade prices: BUY below median × (1 − deviation), SELL above median × (1 + deviation). Its `tp` is a median-deviation threshold, not a position-profit target. Median and fixed/guarded/Auto/Adaptive Range are now enabled for paper mode; Slope remains excluded by product decision.
 
-下一迁移顺序：逐笔行情读取与连续ID检查 → 因果预热和持久检查点 → 原固定Median运行时与当前风控衔接 → 合成信号/断线/重启/卖出回归 → 启用选择项。Range和Auto分别需要价格区间状态与后台选参状态；不改用分钟K线冒充原语义。未迁移目录保持原样，交付仍以本主仓库为准。
+该迁移顺序现已完成：逐笔行情与连续ID检查 → 因果预热和持久检查点 → Median/Range与当前风控衔接 → 合成信号、断线、重启和卖出回归 → 启用选择项。Range Auto并行保存候选区间状态，买入后锁定固定策略参数；未使用分钟K线冒充Range bar。相邻目录保持原样，交付仍以本主仓库为准。
 
-Next migration sequence: trade feed with ID continuity → causal warmup and durable checkpoints → original fixed Median runtime connected to current risk controls → synthetic signal/reconnect/restart/exit tests → enable the selector. Range and Auto additionally require price-range and background-selection state. Minute candles must not silently replace the original inputs. The adjacent tree remains untouched; this repository remains authoritative.
+That migration sequence is now complete: trade-ID continuity → causal warmup and durable checkpoints → Median/Range risk integration → synthetic signal/reconnect/restart/exit tests → enabled selectors. Range Auto persists parallel candidate states and locks a fixed strategy configuration on BUY; minute candles are not substituted for Range bars. The adjacent tree remains untouched and this repository remains authoritative.
 
 ## Median离线前置模块 / Offline Median preparation
 

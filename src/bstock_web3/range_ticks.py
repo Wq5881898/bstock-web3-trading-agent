@@ -145,7 +145,8 @@ class RangeTickStream:
         self.tick_count += 1
         return completed
 
-    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
+    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None,
+                    locked_strategy_params=None):
         if type(now_ms) is not int or now_ms < 0 or type(warmup) is not bool or not isinstance(rows, list) or len(rows) > 1000:
             self.recovery_required = True
             raise ValueError("Invalid Range page request")
@@ -171,8 +172,25 @@ class RangeTickStream:
                 fresh = not cold and not warmup and 0 <= now_ms - tick.time_ms <= 5000
                 buy = sell = False
                 reason = "waiting_range_close"
+                metadata = {"family": staged.config.family,
+                    "selected_range_bps": staged.config.range_bps}
+                required = staged.config.long if staged.config.family == "ema" else staged.config.window
+                if staged.sequence >= required:
+                    if staged.config.family == "ema":
+                        metadata.update(selected_short=staged.config.short,
+                            selected_long=staged.config.long,
+                            selected_entry_threshold=staged.config.entry_threshold,
+                            selected_exit_threshold=staged.config.exit_threshold,
+                            selected_fast=staged.fast, selected_slow=staged.slow,
+                            selection_score=abs(staged.fast / staged.slow - 1))
+                    else:
+                        center = median([bar.close for bar in staged.bars[-staged.config.window:]])
+                        close = staged.bars[-1].close
+                        metadata.update(selected_window=staged.config.window,
+                            selected_deviation=staged.config.deviation,
+                            selected_close=close, selected_median=center,
+                            selection_score=(center-close) / close)
                 if completed:
-                    required = staged.config.long if staged.config.family == "ema" else staged.config.window
                     if staged.sequence < required:
                         reason = f"range_warmup:{staged.sequence}/{required}"
                     elif not fresh:
@@ -189,7 +207,7 @@ class RangeTickStream:
                         reason = "range_" + staged.config.family + "_close"
                     staged.last_evaluated = staged.sequence
                 results.append(RangeObservation(tick, fresh, buy and not staged.recovery_required,
-                    sell, reason, staged.sequence, len(completed)))
+                    sell, reason, staged.sequence, len(completed), metadata))
         except ValueError:
             self.recovery_required = True
             raise

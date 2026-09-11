@@ -84,8 +84,10 @@ def minute_guard_context(snapshot):
     if len(bars) >= 60:
         amplitudes = sorted(float(bar.high) / float(bar.low) - 1 for bar in bars[-60:] if bar.low > 0)
         if amplitudes:
-            index = max(0, math.ceil(.9 * len(amplitudes)) - 1)
-            result["minute_amplitude_p90_60"] = amplitudes[index]
+            position = (len(amplitudes) - 1) * .9
+            lower, upper = math.floor(position), math.ceil(position)
+            result["minute_amplitude_p90_60"] = (amplitudes[lower] if lower == upper else
+                amplitudes[lower] + (amplitudes[upper] - amplitudes[lower]) * (position-lower))
     for window in (15, 30, 60):
         if len(closes) >= window:
             tail = closes[-window:]
@@ -118,12 +120,14 @@ class GuardedRangeMedianStream:
 
     def latest_tick(self): return self.base.latest_tick()
 
-    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None):
-        points = self.base.accept_page(rows, now_ms=now_ms, warmup=warmup)
+    def accept_page(self, rows, *, now_ms: int, warmup=False, context=None,
+                    locked_strategy_params=None):
+        points = self.base.accept_page(rows, now_ms=now_ms, warmup=warmup,
+            locked_strategy_params=locked_strategy_params)
         context = context or {}
         result = []
         for point in points:
-            metadata = self._live_metadata(context)
+            metadata = {**(point.strategy_params or {}), **self._live_metadata(context)}
             buy, reason = point.buy, point.reason
             if buy:
                 guarded = self._entry_confirmed_down(context)

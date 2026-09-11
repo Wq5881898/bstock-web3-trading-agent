@@ -16,6 +16,7 @@ from .strategy import MtfEmaConfig, MtfEmaStrategy, PositionView, SignalDecision
 from .median_ticks import TickMedianConfig
 from .range_ticks import RangeStrategyConfig
 from .range_guard import GuardedRangeMedianConfig
+from .range_auto import RangeAutoConfig, RangeMedianAdaptiveConfig
 from .wallet import AgenticWalletCli, USDC_BSC, WalletOrderResult, WalletQuote
 
 
@@ -73,13 +74,16 @@ class BStockEngineConfig:
     median_config: TickMedianConfig = field(default_factory=TickMedianConfig)
     range_config: RangeStrategyConfig = field(default_factory=RangeStrategyConfig)
     guarded_range_config: GuardedRangeMedianConfig = field(default_factory=GuardedRangeMedianConfig)
+    range_auto_config: RangeAutoConfig = field(default_factory=RangeAutoConfig)
+    range_adaptive_config: RangeMedianAdaptiveConfig = field(default_factory=RangeMedianAdaptiveConfig)
 
     def __post_init__(self) -> None:
-        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median", "range-median-guarded") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig) or not isinstance(self.guarded_range_config, GuardedRangeMedianConfig):
+        if self.strategy_kind not in ("mtf", "median", "range-ema", "range-median", "range-median-guarded",
+                "range-ema-guarded", "range-auto", "range-guarded-auto", "range-median-adaptive") or not isinstance(self.median_config, TickMedianConfig) or not isinstance(self.range_config, RangeStrategyConfig) or not isinstance(self.guarded_range_config, GuardedRangeMedianConfig) or not isinstance(self.range_auto_config, RangeAutoConfig) or not isinstance(self.range_adaptive_config, RangeMedianAdaptiveConfig):
             raise ValueError("Invalid strategy selection")
         if self.strategy_kind != "mtf" and self.mode != "paper":
             raise ValueError("Tick/Range strategies are paper-only")
-        if ((self.strategy_kind == "range-ema" and self.range_config.family != "ema") or
+        if ((self.strategy_kind in ("range-ema", "range-ema-guarded") and self.range_config.family != "ema") or
                 (self.strategy_kind == "range-median" and self.range_config.family != "median")):
             raise ValueError("Range selection/configuration mismatch")
         if not isinstance(self.strategy_config, MtfEmaConfig):

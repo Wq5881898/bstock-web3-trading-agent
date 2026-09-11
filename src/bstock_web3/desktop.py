@@ -15,6 +15,7 @@ from .strategy import MtfEmaConfig
 from .median_ticks import TickMedianConfig
 from .range_ticks import RANGE_BPS, RANGE_MEDIAN_WINDOWS, RangeStrategyConfig
 from .range_guard import GuardedRangeMedianConfig
+from .range_auto import RangeAutoConfig, RangeMedianAdaptiveConfig, RangeMedianCandidate
 
 
 STYLE = """
@@ -161,9 +162,10 @@ def create_monitor_class(engine_factory=None):
                 "Range EMA · 固定区间模拟 / Fixed range paper",
                 "Range Median · 固定区间模拟 / Fixed range paper",
                 "Range Median · EMA/P90防御 / EMA/P90 guarded",
-                "Range Auto / Adaptive · 迁移中 / Migration in progress"])
-            for index in (6,):
-                self.strategy_choice.model().item(index).setEnabled(False)
+                "Range EMA Guarded · 入场防御 / Entry guarded",
+                "Range Auto · 自动区间 / Automatic range",
+                "Range Guarded Auto · 自动区间+防御 / Auto + guard",
+                "Range Median Adaptive · 自适应中位数 / Adaptive median"])
             strategy_layout.addWidget(self.strategy_choice)
             strategy_layout.addWidget(QtWidgets.QLabel(
                 "自定义仅限模拟；持仓期间必须使用原参数。\nCustom settings: paper only; open positions retain original parameters.\n"
@@ -254,6 +256,26 @@ def create_monitor_class(engine_factory=None):
                 self.guarded_range_inputs[key] = edit
                 self.guarded_range_grid.addRow(guarded_labels[key], edit)
             strategy_layout.addLayout(self.guarded_range_grid)
+            self.auto_range_inputs = {}
+            self.auto_range_grid = QtWidgets.QFormLayout()
+            auto_defaults = asdict(RangeAutoConfig())
+            ranges = QtWidgets.QLineEdit(",".join(str(v) for v in auto_defaults["ranges_bps"]))
+            self.auto_range_inputs["ranges_bps"] = ranges
+            self.auto_range_grid.addRow("候选bps(逗号) / Candidate bps", ranges)
+            for key, label in (("short", "EMA快线 / Fast"), ("long", "EMA慢线 / Slow"),
+                               ("entry_threshold", "买入阈值 / Entry"), ("exit_threshold", "卖出阈值 / Exit")):
+                value = auto_defaults[key]
+                edit = QtWidgets.QSpinBox() if type(value) is int else QtWidgets.QDoubleSpinBox()
+                if type(value) is int: edit.setRange(2, 100)
+                else: edit.setDecimals(6); edit.setRange(0, .999999); edit.setSingleStep(.0001)
+                edit.setValue(value)
+                self.auto_range_inputs[key] = edit
+                self.auto_range_grid.addRow(label, edit)
+            strategy_layout.addLayout(self.auto_range_grid)
+            self.adaptive_candidates = QtWidgets.QLineEdit("20:20:0.0035,30:60:0.004")
+            self.adaptive_range_grid = QtWidgets.QFormLayout()
+            self.adaptive_range_grid.addRow("bps:窗口:偏离 / bps:window:deviation", self.adaptive_candidates)
+            strategy_layout.addLayout(self.adaptive_range_grid)
             strategy_layout.addStretch(1)
             self.tabs.addTab(strategy_page, "策略 / Strategies")
             account_page = QtWidgets.QWidget()
@@ -290,20 +312,23 @@ def create_monitor_class(engine_factory=None):
             range_ema = self.strategy_choice.currentIndex() == 3
             range_median = self.strategy_choice.currentIndex() == 4
             guarded_range = self.strategy_choice.currentIndex() == 5
+            range_ema_guarded = self.strategy_choice.currentIndex() == 6
+            range_auto = self.strategy_choice.currentIndex() in (7, 8)
+            range_adaptive = self.strategy_choice.currentIndex() == 9
             if not custom:
                 for key, value in asdict(MtfEmaConfig()).items():
                     self.strategy_inputs[key].setValue(value)
             for edit in self.strategy_inputs.values():
                 edit.setEnabled(custom and self.runner is None)
-                edit.setVisible(not (median or range_ema or range_median or guarded_range))
-                self.strategy_grid.labelForField(edit).setVisible(not (median or range_ema or range_median or guarded_range))
+                edit.setVisible(not (median or range_ema or range_median or guarded_range or range_ema_guarded or range_auto or range_adaptive))
+                self.strategy_grid.labelForField(edit).setVisible(edit.isVisible())
             for edit in self.median_inputs.values():
                 edit.setEnabled(median and self.runner is None)
                 edit.setVisible(median)
                 self.median_grid.labelForField(edit).setVisible(median)
             for key, edit in self.range_inputs.items():
-                visible = range_ema or range_median
-                family_field = key in (("short", "long", "entry_threshold", "exit_threshold") if range_ema else ("window", "deviation"))
+                visible = range_ema or range_median or range_ema_guarded
+                family_field = key in (("short", "long", "entry_threshold", "exit_threshold") if (range_ema or range_ema_guarded) else ("window", "deviation"))
                 edit.setEnabled(visible and family_field and self.runner is None or visible and key == "range_bps" and self.runner is None)
                 edit.setVisible(visible and (family_field or key == "range_bps"))
                 self.range_grid.labelForField(edit).setVisible(edit.isVisible())
@@ -311,9 +336,15 @@ def create_monitor_class(engine_factory=None):
                 edit.setEnabled(guarded_range and self.runner is None)
                 edit.setVisible(guarded_range)
                 self.guarded_range_grid.labelForField(edit).setVisible(guarded_range)
+            for edit in self.auto_range_inputs.values():
+                edit.setEnabled(range_auto and self.runner is None); edit.setVisible(range_auto)
+                self.auto_range_grid.labelForField(edit).setVisible(range_auto)
+            self.adaptive_candidates.setEnabled(range_adaptive and self.runner is None)
+            self.adaptive_candidates.setVisible(range_adaptive)
+            self.adaptive_range_grid.labelForField(self.adaptive_candidates).setVisible(range_adaptive)
 
         def selected_strategy_config(self):
-            if self.strategy_choice.currentIndex() not in (0, 1, 2, 3, 4, 5):
+            if self.strategy_choice.currentIndex() not in range(10):
                 raise ValueError("Strategy is not available")
             return MtfEmaConfig(**{key: edit.value() for key, edit in self.strategy_inputs.items()})
 
@@ -324,7 +355,23 @@ def create_monitor_class(engine_factory=None):
             return RangeStrategyConfig(family="median" if index == 4 else "ema", **values)
 
         def selected_strategy_kind(self):
-            return {2: "median", 3: "range-ema", 4: "range-median", 5: "range-median-guarded"}.get(self.strategy_choice.currentIndex(), "mtf")
+            return {2: "median", 3: "range-ema", 4: "range-median", 5: "range-median-guarded",
+                6: "range-ema-guarded", 7: "range-auto", 8: "range-guarded-auto",
+                9: "range-median-adaptive"}.get(self.strategy_choice.currentIndex(), "mtf")
+
+        def selected_auto_range_config(self):
+            values = {key: edit.value() for key, edit in self.auto_range_inputs.items() if key != "ranges_bps"}
+            values["ranges_bps"] = tuple(int(v.strip()) for v in self.auto_range_inputs["ranges_bps"].text().split(",") if v.strip())
+            return RangeAutoConfig(**values)
+
+        def selected_adaptive_range_config(self):
+            candidates = []
+            for raw in self.adaptive_candidates.text().split(","):
+                parts = raw.strip().split(":")
+                if len(parts) != 3:
+                    raise ValueError("Adaptive candidates require bps:window:deviation")
+                candidates.append(RangeMedianCandidate(int(parts[0]), int(parts[1]), float(parts[2])))
+            return RangeMedianAdaptiveConfig(tuple(candidates))
 
         def selected_guarded_range_config(self):
             values = asdict(GuardedRangeMedianConfig())
@@ -349,6 +396,8 @@ def create_monitor_class(engine_factory=None):
                     median_config={key: edit.value() for key, edit in self.median_inputs.items()},
                     range_config=asdict(self.selected_range_config()),
                     guarded_range_config=asdict(self.selected_guarded_range_config()),
+                    range_auto_config=asdict(self.selected_auto_range_config()),
+                    range_adaptive_config=asdict(self.selected_adaptive_range_config()),
                     **{k: str(e.value()) if k == "paper_position_cap" else e.value()
                        for k, e in self.risk_inputs.items()})
                 save_preferences(self.preferences_path, preferences)
@@ -376,7 +425,9 @@ def create_monitor_class(engine_factory=None):
             for key, edit in self.risk_inputs.items():
                 value = getattr(preferences, key)
                 edit.setValue(float(value) if key == "paper_position_cap" else value)
-            self.strategy_choice.setCurrentIndex({"median": 2, "range-ema": 3, "range-median": 4, "range-median-guarded": 5}.get(
+            self.strategy_choice.setCurrentIndex({"median": 2, "range-ema": 3, "range-median": 4, "range-median-guarded": 5,
+                "range-ema-guarded": 6, "range-auto": 7, "range-guarded-auto": 8,
+                "range-median-adaptive": 9}.get(
                 preferences.strategy_kind, 0 if preferences.strategy_config == asdict(MtfEmaConfig()) else 1))
             for key, value in preferences.median_config.items():
                 self.median_inputs[key].setValue(value)
@@ -392,6 +443,11 @@ def create_monitor_class(engine_factory=None):
                     continue
                 edit = self.guarded_range_inputs[key]
                 edit.setCurrentText(str(value)) if isinstance(edit, QtWidgets.QComboBox) else edit.setValue(value)
+            for key, value in preferences.range_auto_config.items():
+                edit = self.auto_range_inputs[key]
+                edit.setText(",".join(str(v) for v in value)) if key == "ranges_bps" else edit.setValue(value)
+            candidates = preferences.range_adaptive_config["candidates"]
+            self.adaptive_candidates.setText(",".join(f'{v["range_bps"]}:{v["window"]}:{v["deviation"]}' for v in candidates))
             self.strategy_selection_changed()
             self.status.setText("已读取参数；未运行，请核对后启动 / Settings loaded; stopped; review before start")
 
@@ -411,6 +467,8 @@ def create_monitor_class(engine_factory=None):
                     median_config=TickMedianConfig(**{key: edit.value() for key, edit in self.median_inputs.items()}),
                     range_config=self.selected_range_config(),
                     guarded_range_config=self.selected_guarded_range_config(),
+                    range_auto_config=self.selected_auto_range_config(),
+                    range_adaptive_config=self.selected_adaptive_range_config(),
                     **{k: Decimal(str(e.value())) if k == "paper_position_cap" else e.value() for k, e in self.risk_inputs.items()},
                     state_file=desktop_state_file(self.symbol.text(), self.mode.currentText()))
                 if config.strategy_kind != "mtf":
@@ -435,7 +493,7 @@ def create_monitor_class(engine_factory=None):
             self.fill_history.setRowCount(0)
             self.runner = PollRunner(lambda: engine_factory(config))
             self.strategy_choice.setEnabled(False)
-            for edit in (*self.strategy_inputs.values(), *self.median_inputs.values(), *self.range_inputs.values(), *self.guarded_range_inputs.values()):
+            for edit in (*self.strategy_inputs.values(), *self.median_inputs.values(), *self.range_inputs.values(), *self.guarded_range_inputs.values(), *self.auto_range_inputs.values(), self.adaptive_candidates):
                 edit.setEnabled(False)
             for widget in (self.symbol, self.mode, self.amount, self.loss_limit, self.save_settings, self.load_settings, *self.risk_inputs.values()):
                 widget.setEnabled(False)

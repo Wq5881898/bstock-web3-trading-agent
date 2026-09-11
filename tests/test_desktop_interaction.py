@@ -135,7 +135,8 @@ def test_strategy_editor_validates_before_engine_construction(monkeypatch, tmp_p
         assert window.strategy_choice.model().item(3).isEnabled()
         assert window.strategy_choice.model().item(4).isEnabled()
         assert window.strategy_choice.model().item(5).isEnabled()
-        assert not window.strategy_choice.model().item(6).isEnabled()
+        for index in range(6, 10):
+            assert window.strategy_choice.model().item(index).isEnabled()
         assert all(not edit.isEnabled() for edit in window.strategy_inputs.values())
         window.strategy_choice.setCurrentIndex(1)
         window.strategy_inputs["entry_short"].setValue(30)
