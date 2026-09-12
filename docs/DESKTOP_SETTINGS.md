@@ -4,7 +4,7 @@
 
 后续更新 / Follow-up: v2现在包含可编辑的MTF EMA参数，并兼容读取完整v1预设；见[策略编辑说明](STRATEGY_INTEGRATION.md)。下文为初次参数保存阶段记录。 / v2 now includes editable MTF EMA parameters and reads exact v1 presets compatibly; see [Strategy editing](STRATEGY_INTEGRATION.md). The initial phase record follows.
 
-最新验证 / Latest validation: **277 tests passed**. Native synthetic desktop acceptance: **650 attempts, 38 injected failures, 13.41s**, passed. Local report: `runtime/desktop-acceptance/1789101345204910200/report.json`. This accelerated fixture is not a long-duration real-market test. 验证未授权账户或下真实订单 / Validation did not authorize an account or place real orders.
+最新验证 / Latest validation: **283 tests passed**. Native synthetic desktop acceptance: **650 attempts, 38 injected failures, 13.41s**, passed. Local report: `runtime/desktop-acceptance/1789101345204910200/report.json`. This accelerated fixture is not a long-duration real-market test. 验证未授权账户或下真实订单 / Validation did not authorize an account or place real orders.
 
 桌面提供“保存参数”和“读取已保存参数”。修改后需要点击保存；启动、停止或关闭窗口不会隐式覆盖文件。再次打开应用时读取已保存参数，但始终停止，必须人工点击启动。当前保存一组参数，不是多策略预设管理器；策略仍为现有MTF EMA。
 
