@@ -13,7 +13,8 @@ from bstock_web3.range_ticks import RangeStrategyConfig
 from bstock_web3.strategy import MtfEmaConfig, PositionView
 from bstock_web3.strategy_contract import CandleMarketInput, TradeMarketInput
 from bstock_web3.strategy_registry import (ALL_PRODUCT_TAGS, StrategySpec,
-    build_strategy_runtime, compatible_strategy_ids, ensure_strategy_supports,
+    build_portable_strategy_runtime, build_strategy_runtime,
+    compatible_strategy_ids, default_strategy_config, ensure_strategy_supports,
     strategy_ids, strategy_spec)
 
 
@@ -52,6 +53,24 @@ def test_every_tick_strategy_builds_through_the_same_contract():
         result = runtime.evaluate(TradeMarketInput([
             {"a":1,"T":1788955200000,"p":"100","q":"1"}], 1788955200000))[0]
         assert result.strategy_id == strategy_id and result.source_id == 1
+
+
+def test_every_strategy_has_a_portable_factory_independent_of_engine_config():
+    for strategy_id in strategy_ids():
+        config = default_strategy_config(strategy_id)
+        assert isinstance(config, strategy_spec(strategy_id).config_type)
+        runtime = build_portable_strategy_runtime(strategy_id, "nvdabusdt", config)
+        assert runtime.strategy_id == strategy_id
+    with pytest.raises(ValueError, match="Invalid configuration"):
+        build_portable_strategy_runtime("range-median", "NVDABUSDT",
+            MtfEmaConfig())
+    with pytest.raises(ValueError, match="requires Range family"):
+        build_portable_strategy_runtime("range-median", "NVDABUSDT",
+            RangeStrategyConfig(family="ema"))
+    with pytest.raises(ValueError, match="symbol"):
+        build_portable_strategy_runtime("mtf", "bad/symbol")
+    with pytest.raises(ValueError, match="symbol"):
+        build_portable_strategy_runtime("mtf", None)
 
 
 def test_strategy_product_tags_are_registry_metadata_not_execution_copies():

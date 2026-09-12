@@ -92,9 +92,9 @@ bstock-backtest --help
 bstock-mcp-plan --help
 ```
 
-`v1.1.0` 的预期测试结果是 `23 passed`。测试失败时不要继续连接实盘通道。
+当前开发版的预期测试结果是 `277 passed`。测试失败时不要继续连接实盘通道。
 
-For `v1.1.0`, the expected test result is `23 passed`. Do not continue to a live route
+For the current development revision, the expected result is `277 passed`. Do not continue to a live route
 if tests fail.
 
 ## 6. 第一次运行：模拟盘 / First Run: Paper Mode
@@ -414,4 +414,3 @@ cannot eliminate market, liquidity, model or infrastructure risk.
 - [Agentic Wallet authentication reference](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/authentication.md)
 - [本项目 MCP 双执行通道说明](AGENT_OS_MCP.md)
 - [本项目演示指南](DEMO.md)
-

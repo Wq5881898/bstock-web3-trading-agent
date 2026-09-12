@@ -12,6 +12,24 @@ Every strategy is implemented once. MTF EMA, tick Median and fixed/guarded/Auto/
 
 The strategy core has no HTTP, MCP, wallet, database or desktop dependency. Another Python application can install this package, or copy the unified strategy module set together: `strategy.py`, `strategy_contract.py`, `strategy_registry.py`, `median_ticks.py`, `range_ticks.py`, `range_guard.py`, `range_auto.py` and `regime.py`. The host supplies normalized candle snapshots or aggregate-trade rows and consumes `StrategyEvaluation`. Install the package or copy the complete strategy set; do not fork an individual strategy file.
 
+外部程序不需要构造`BStockEngineConfig`。统一注册表为每个策略保存配置类型、默认配置factory和runtime factory，可直接调用：
+
+```python
+from bstock_web3.strategy_registry import (
+    build_portable_strategy_runtime,
+    default_strategy_config,
+)
+
+config = default_strategy_config("range-median")
+runtime = build_portable_strategy_runtime("range-median", "NVDABUSDT", config)
+```
+
+External applications do not need `BStockEngineConfig`. Every registry entry owns its config type, default-config factory and runtime factory. `build_portable_strategy_runtime(strategy_id, symbol, config)` is the standalone construction API; the old `build_strategy_runtime(engine_config, symbol)` remains only as this application's compatibility adapter.
+
+2026-09-12安装级验收将项目构建为wheel、使用`--no-deps`安装到隔离目录，然后由没有项目开发依赖的干净Python 3.11进程以`-I`模式导入。全部9类策略均通过`default_strategy_config()`与`build_portable_strategy_runtime()`构建成功。验收产物位于被Git忽略的`runtime/portable-wheel-acceptance/20260912/`；该测试只验证策略库打包与构建，不读取行情或账户。
+
+The 2026-09-12 installation acceptance built a wheel, installed it with `--no-deps` into an isolated directory, and imported it under `python -I` using a clean Python 3.11 installation without the project's development dependencies. All nine strategy types were constructed through `default_strategy_config()` and `build_portable_strategy_runtime()`. Ignored evidence lives under `runtime/portable-wheel-acceptance/20260912/`. This verifies packaging and strategy construction only; it accessed neither market data nor accounts.
+
 ## 产品标签 / Product tags
 
 每个`StrategySpec`都带有`supported_products`，可使用`SPOT`、`WEB3_SPOT`、`FUTURES`任意组合。`compatible_strategy_ids()`用于界面筛选，`ensure_strategy_supports()`在生成执行意图前做强制校验。当前9个策略只使用价格/成交/K线并采用long/flat语义，因此都标记兼容三类产品；真实产品能否下单仍由对应执行适配器和授权决定。未来依赖资金费率、做空或合约持仓的策略应只标记`FUTURES`，无需复制注册表或执行器。
