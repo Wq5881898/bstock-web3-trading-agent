@@ -62,9 +62,9 @@ The Candles tab still displays 1m/5m time candles for observation only; Range si
 
 Automated coverage includes exact multi-bar jumps, volume ownership, EMA/Median signals, warmup/staleness, conflicts/gaps, corrupt checkpoints, abnormal-jump limits, transactional rollback, restart exits, manual resume, desktop persistence and isolated state paths. Native desktop acceptance uses synthetic data without an account. Sustained public-feed observation during an active market remains pending; Range stays paper-only until MCP live execution is separately designed and explicitly authorized.
 
-本轮证据：Python 3.11完整回归297项通过；原生桌面650轮刷新、38次故障注入通过（13.41秒）。固定、防御、Auto和Adaptive页面截图位于被Git忽略的`runtime/desktop-acceptance/1789101345204910200/`。这些数字是本地加速模拟，不是实盘验收。
+本轮证据：Python 3.11完整回归302项通过；原生桌面650轮刷新、38次故障注入通过（13.41秒）。固定、防御、Auto和Adaptive页面截图位于被Git忽略的`runtime/desktop-acceptance/1789101345204910200/`。这些数字是本地加速模拟，不是实盘验收。
 
-Latest validation passed 297 Python 3.11 tests and 650 native-desktop refreshes with 38 injected failures in 13.41 seconds. Fixed, guarded, Auto and Adaptive screenshots are under git-ignored `runtime/desktop-acceptance/1789101345204910200/`. These are accelerated local simulations, not live acceptance.
+Latest validation passed 302 Python 3.11 tests and 650 native-desktop refreshes with 38 injected failures in 13.41 seconds. Fixed, guarded, Auto and Adaptive screenshots are under git-ignored `runtime/desktop-acceptance/1789101345204910200/`. These are accelerated local simulations, not live acceptance.
 
 2026-09-10公共行情复测：Range EMA与Range Median都成功读取NVDAB最新逐笔成交，游标前进、市场状态正常、K线页各返回239根。1000笔初始预热仅形成2根20 bps Range bar，未达到EMA的45根或Median的20根要求，因此0笔模拟成交；这是正常预热，不是放宽门槛的理由。报告位于`runtime/tick-public-smoke/range-ema-1789074677580056400/`和`range-median-1789074690040502200/`。
 

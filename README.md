@@ -85,8 +85,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**297项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **297 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**302项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **302 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -97,6 +97,8 @@ market snapshot and do not trigger additional wallet calls or orders.
   Median public NVDAB feed and desktop are connected; two reads succeeded but stale ticks produced no paper fills. See [Median desktop notes](docs/MEDIAN_DESKTOP.md).
 - Range EMA/Median已接公共NVDAB逐笔行情；1000笔预热形成2根20 bps Range bar，因未达到策略预热数量而保持0成交。<br>
   Range EMA/Median read public NVDAB trades successfully; 1,000 warmup trades formed two 20-bps bars, so the strategies correctly remained unready with zero fills.
+- Agent OS MCP已完成一次BTCUSDT真实只读账户/余额/订单/成交/手续费/规则/盘口核对；未调用写工具。<br>
+  Agent OS MCP completed one real read-only BTCUSDT account, balance, order, fill, commission, rule and book reconciliation; no write tool was called.
 - **尚未完成**：持续真实行情与成交验收、完整历史成交UI、
   独立OAuth Token交换/安全存储、生产MCP账户查询/下单适配器及无人值守实盘验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
@@ -112,6 +114,7 @@ market snapshot and do not trigger additional wallet calls or orders.
 [统一策略架构 / Unified strategy architecture](docs/UNIFIED_STRATEGY_ARCHITECTURE.md) ·
 [自动交易风控 / Automation policy](docs/AUTOMATION_POLICY.md) ·
 [MCP执行安全 / MCP execution safety](docs/MCP_EXECUTION_SAFETY.md) ·
+[MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 
@@ -260,7 +263,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `297 passed`
+- 本地自动化测试 / Local automated tests: `302 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance
