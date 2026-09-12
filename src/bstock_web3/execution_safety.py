@@ -17,6 +17,7 @@ import re
 from .automation_policy import (AccountRiskSnapshot, AutomationAction,
                                 AutomationDecision, AutomationPolicy)
 from .execution_contract import OrderIntent, PositionAction, ProductType
+from .execution_lock import ExecutionLock
 
 
 def _decimal_text(value: Decimal) -> str:
@@ -205,11 +206,21 @@ class ExecutionJournal:
         ExecutionPhase.REJECTED: set(),
     }
 
-    def __init__(self, path: Path | None = None):
+    def __init__(self, path: Path | None = None,
+                 execution_lock: ExecutionLock | None = None):
         self.path = path
+        self.execution_lock = execution_lock
         self._records: dict[str, ExecutionRecord] = {}
         if self.path is not None and self.path.exists():
             self._load_existing()
+
+    @property
+    def execution_lock_held(self):
+        if self.path is None or self.execution_lock is None:
+            return False
+        expected = self.path.with_suffix(self.path.suffix + ".lock")
+        return (self.execution_lock.held
+                and self.execution_lock.path.resolve() == expected.resolve())
 
     def prepare(self, intent: OrderIntent, snapshot: AccountRiskSnapshot,
                 *, signal_key: str, amount_kind: str, amount: Decimal,
@@ -293,8 +304,8 @@ class ExecutionJournal:
         temporary.replace(self.path)
 
     @classmethod
-    def load(cls, path: Path):
-        return cls(path)
+    def load(cls, path: Path, execution_lock: ExecutionLock | None = None):
+        return cls(path, execution_lock)
 
     def _load_existing(self):
         try:
@@ -386,6 +397,8 @@ def prepare_safe_execution(
     reasons = [*decision.reasons, *arming.block_reasons(snapshot, now_ms=now_ms)]
     if journal.path is None:
         reasons.append("non_persistent_execution_journal")
+    if not journal.execution_lock_held:
+        reasons.append("execution_lock_not_held")
     if reasons:
         blocked = AutomationDecision(AutomationAction.BLOCK,
             tuple(dict.fromkeys(reasons)), decision.buy_pause_reason,

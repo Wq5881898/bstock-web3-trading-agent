@@ -13,6 +13,7 @@
 - 策略事件键、风险日、交易意图和精确下单量共同生成稳定指纹；
 - 确定性`client_order_id`，同一策略事件只能准备一次；
 - 强制落盘的原子JSON执行日志、启动自动恢复和严格状态迁移；
+- 系统级跨进程执行锁，同一账户状态只能由一个执行实例持有；
 - 网络超时等不确定结果进入`UNKNOWN`，只能查单核对，禁止自动再次提交。
 
 The delivery includes:
@@ -22,6 +23,7 @@ The delivery includes:
 - a stable fingerprint covering the strategy event, risk day, intent and exact order amount;
 - a deterministic `client_order_id`, allowing one preparation per strategy event;
 - a mandatory durable atomic JSON execution journal, automatic startup restore and strict phase transitions;
+- an OS-level cross-process execution lock, allowing one owner for an account state;
 - `UNKNOWN` after an uncertain result: reconcile by read-only order lookup and never resubmit automatically.
 
 ## 未来宿主的固定顺序 / Required future host sequence
@@ -38,6 +40,8 @@ AutomationPolicy ALLOW/BLOCK
 ExecutionArming（账户、标的、产品、有效期）
         ↓
 ExecutionJournal PREPARED
+        ↓
+持有跨进程执行锁 / execution lock held
         ↓
 先持久化 SUBMITTING
         ↓
@@ -62,6 +66,6 @@ SUBMITTED/FILLED/REJECTED；超时则 UNKNOWN → 只查单
 
 ## 仍未完成 / Still pending
 
-当前仓库尚未实现生产MCP `tools/call`适配器、跨进程执行锁、Agent OS工具名/参数的运行时发现映射、真实Agentic子账户对账或无人值守实盘验收。现有`mcp_bridge.py`逐笔人工确认演示通道保持不变。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
+当前仓库尚未实现生产MCP `tools/call`适配器、Agent OS工具名/参数的运行时发现映射、真实Agentic子账户对账或无人值守实盘验收。跨进程锁已作为独立标准库组件提供，并由安全准备入口强制要求，但尚未接入生产MCP宿主。现有`mcp_bridge.py`逐笔人工确认演示通道保持不变。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
 
-The repository still has no production MCP `tools/call` adapter, cross-process execution lock, runtime mapping of discovered Agent OS tool names/arguments, real Agentic-account reconciliation or unattended live acceptance. The existing per-order-confirmed `mcp_bridge.py` demonstration remains unchanged. An API-key trading fallback still requires prior discussion and explicit user approval.
+The repository still has no production MCP `tools/call` adapter, runtime mapping of discovered Agent OS tool names/arguments, real Agentic-account reconciliation or unattended live acceptance. A standalone standard-library cross-process lock is now available and mandatory at the safe-preparation entry point, but is not yet wired to a production MCP host. The existing per-order-confirmed `mcp_bridge.py` demonstration remains unchanged. An API-key trading fallback still requires prior discussion and explicit user approval.

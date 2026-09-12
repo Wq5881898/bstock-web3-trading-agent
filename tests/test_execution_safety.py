@@ -5,6 +5,7 @@ import pytest
 from bstock_web3.automation_policy import AutomationPolicy
 from bstock_web3.execution_contract import (ExecutionInstrument, OrderIntent,
     PositionAction, ProductType)
+from bstock_web3.execution_lock import ExecutionLock
 from bstock_web3.execution_safety import (ExecutionArming, ExecutionJournal,
     ExecutionMode, ExecutionPhase, McpReconciliationEvidence,
     client_order_id, intent_fingerprint, prepare_safe_execution)
@@ -41,6 +42,13 @@ def armed(**changes):
     return ExecutionArming(**values)
 
 
+def locked_journal(tmp_path, name="journal"):
+    journal_path = tmp_path / f"{name}.json"
+    lock = ExecutionLock(journal_path.with_suffix(".json.lock"))
+    assert lock.acquire()
+    return ExecutionJournal(journal_path, lock), lock
+
+
 def test_all_four_mcp_reads_are_required_for_reconciled_snapshot():
     assert evidence().to_snapshot().reconciled
     assert not evidence(fills_checked=False).to_snapshot().reconciled
@@ -55,7 +63,7 @@ def test_default_observe_only_mode_cannot_prepare_submission():
 
 
 def test_armed_reconciled_intent_gets_deterministic_client_order_id(tmp_path):
-    journal = ExecutionJournal(tmp_path / "journal.json")
+    journal, lock = locked_journal(tmp_path)
     result = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
         armed(), journal, signal_key=SIGNAL_KEY, now_ms=NOW)
     assert result.decision.allowed
@@ -64,10 +72,11 @@ def test_armed_reconciled_intent_gets_deterministic_client_order_id(tmp_path):
                                      "QUOTE", Decimal("100"))
     assert result.record.client_order_id == client_order_id(fingerprint)
     assert len(result.record.client_order_id) == 35
+    lock.release()
 
 
 def test_same_intent_is_never_prepared_twice(tmp_path):
-    journal = ExecutionJournal(tmp_path / "journal.json")
+    journal, lock = locked_journal(tmp_path)
     first = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
         armed(), journal, signal_key=SIGNAL_KEY, now_ms=NOW)
     second = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
@@ -76,6 +85,7 @@ def test_same_intent_is_never_prepared_twice(tmp_path):
     assert not second.decision.allowed and second.duplicate
     assert second.record == first.record
     assert second.decision.reasons == ("duplicate_execution_intent",)
+    lock.release()
 
 
 def test_unknown_submission_must_reconcile_and_cannot_return_to_prepared():
@@ -121,39 +131,44 @@ def test_arming_is_bound_to_account_symbol_product_and_expiry():
 
 def test_risk_policy_still_allows_exit_while_buy_latch_is_active(tmp_path):
     policy = AutomationPolicy()
+    journal, lock = locked_journal(tmp_path)
     buy = prepare_safe_execution(intent(), evidence(
         daily_equity_loss=Decimal("10")), policy, armed(),
-        ExecutionJournal(tmp_path / "buy.json"), signal_key=SIGNAL_KEY, now_ms=NOW)
+        journal, signal_key=SIGNAL_KEY, now_ms=NOW)
     assert not buy.decision.allowed
     exit_result = prepare_safe_execution(intent(PositionAction.CLOSE_LONG),
         evidence(daily_equity_loss=Decimal("10"),
                  position_quantity=Decimal("0.01"),
                  position_cost=Decimal("100")), policy, armed(),
-        ExecutionJournal(tmp_path / "sell.json"),
+        journal,
         signal_key=SIGNAL_KEY + ":exit", now_ms=NOW)
     assert exit_result.decision.allowed
+    lock.release()
 
 
 def test_distinct_strategy_events_at_same_price_are_not_duplicates(tmp_path):
-    journal = ExecutionJournal(tmp_path / "journal.json")
+    journal, lock = locked_journal(tmp_path)
     first = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
         armed(), journal, signal_key="trade:100", now_ms=NOW)
     second = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
         armed(), journal, signal_key="trade:101", now_ms=NOW + 1)
     assert first.decision.allowed and second.decision.allowed
     assert first.record.fingerprint != second.record.fingerprint
+    lock.release()
 
 
 def test_exact_buy_budget_and_sell_quantity_are_persisted(tmp_path):
+    journal, lock = locked_journal(tmp_path)
     buy = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
-        armed(), ExecutionJournal(tmp_path / "buy.json"),
+        armed(), journal,
         signal_key="trade:buy", now_ms=NOW)
     sell = prepare_safe_execution(intent(PositionAction.CLOSE_LONG), evidence(
         position_quantity=Decimal("0.0123"), position_cost=Decimal("99")),
-        AutomationPolicy(), armed(), ExecutionJournal(tmp_path / "sell.json"),
+        AutomationPolicy(), armed(), journal,
         signal_key="trade:sell", now_ms=NOW)
     assert (buy.record.amount_kind, buy.record.amount) == ("QUOTE", "100")
     assert (sell.record.amount_kind, sell.record.amount) == ("BASE", "0.0123")
+    lock.release()
 
 
 def test_unattended_preparation_requires_a_persistent_journal():
@@ -161,3 +176,14 @@ def test_unattended_preparation_requires_a_persistent_journal():
         armed(), ExecutionJournal(), signal_key=SIGNAL_KEY, now_ms=NOW)
     assert not result.decision.allowed
     assert "non_persistent_execution_journal" in result.decision.reasons
+    assert "execution_lock_not_held" in result.decision.reasons
+
+
+def test_unattended_preparation_requires_held_execution_lock(tmp_path):
+    path = tmp_path / "journal.json"
+    journal = ExecutionJournal(path, ExecutionLock(
+        path.with_suffix(".json.lock")))
+    result = prepare_safe_execution(intent(), evidence(), AutomationPolicy(),
+        armed(), journal, signal_key=SIGNAL_KEY, now_ms=NOW)
+    assert not result.decision.allowed
+    assert result.decision.reasons == ("execution_lock_not_held",)
