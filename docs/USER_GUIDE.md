@@ -92,9 +92,9 @@ bstock-backtest --help
 bstock-mcp-plan --help
 ```
 
-当前开发版的预期测试结果是 `302 passed`。测试失败时不要继续连接实盘通道。
+当前开发版的预期测试结果是 `311 passed`。测试失败时不要继续连接实盘通道。
 
-For the current development revision, the expected result is `302 passed`. Do not continue to a live route
+For the current development revision, the expected result is `311 passed`. Do not continue to a live route
 if tests fail.
 
 ## 6. 第一次运行：模拟盘 / First Run: Paper Mode

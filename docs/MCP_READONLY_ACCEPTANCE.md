@@ -11,6 +11,7 @@ One read-only `BTCUSDT` reconciliation was completed through the Binance Agent O
 - `spot.getAccount`：账户为Spot，`canTrade=true`，BTC和USDT余额可读；
 - `spot.getOpenOrders`：目标标的没有未决订单；
 - `spot.myTrades`与`spot.allOrders`：此前约10 USDT的BTC市价买入可核对，订单终态为`FILLED`；
+- `fromId=0`和`orderId=0`的起始分页在真实MCP响应中有效，可从最早记录向后推进；
 - 实际BTC余额等于买入数量减去BTC手续费；
 - `spot.accountCommission`：标准maker/taker费率和折扣状态可读；
 - `spot.exchangeInfo`：`BTCUSDT`为`TRADING`，支持Spot、市价单和`quoteOrderQty`，最小名义价值为5 USDT；
@@ -22,6 +23,7 @@ Verified results:
 - `spot.getAccount`: Spot account, `canTrade=true`, readable BTC and USDT balances;
 - `spot.getOpenOrders`: no pending order for the target symbol;
 - `spot.myTrades` plus `spot.allOrders`: the earlier roughly 10-USDT BTC market buy reconciles to a terminal `FILLED` order;
+- initial pagination with `fromId=0` and `orderId=0` works against the real MCP response and can advance forward from the earliest record;
 - actual BTC balance equals bought quantity less the BTC-denominated commission;
 - `spot.accountCommission`: standard maker/taker rates and discount state are readable;
 - `spot.exchangeInfo`: `BTCUSDT` is `TRADING`, supports Spot market `quoteOrderQty`, and has a 5-USDT minimum notional;
@@ -34,6 +36,6 @@ Verified results:
 
 `mcp_spot_snapshot.py` converts host-supplied JSON shaped like the real responses into `McpReconciliationEvidence`. It verifies the expected account UID, Spot account type, trading permission, complete paginated fills, order/fill linkage, fee-adjusted base balance, available quote balance, pending orders and book. The single-symbol prototype fails closed on unexplained base inventory, third-asset fees or another nonzero asset until account-level risk accounting supports them.
 
-该模块不包含MCP客户端或`tools/call`。当前Codex宿主能够访问真实MCP，但公开Python项目仍需实现独立OAuth会话、工具发现/调用宿主以及分页器，才能从桌面程序自主取得这些JSON。API Key替代路线没有启用。
+`mcp_readonly.py`现已提供独立工具发现、双层只读白名单、`tools/call`响应解码和有界成交/订单分页。客户端和HTTP传输层都会拒绝`spot.newOrder`等写工具。当前仍缺Token交换、系统凭据安全存储和桌面接线，因此尚不能从独立桌面完成登录。API Key替代路线没有启用。
 
-The module contains no MCP client or `tools/call`. The current Codex host can access the real MCP, but the public Python application still needs its own OAuth session, discovery/call host and paginator before its desktop process can obtain these JSON payloads. No API-key fallback is enabled.
+`mcp_readonly.py` now provides independent discovery, defense-in-depth read allowlisting, `tools/call` result decoding and bounded fill/order pagination. Both the client and HTTP transport reject write tools such as `spot.newOrder`. Token exchange, OS credential storage and desktop wiring are still pending, so the standalone desktop cannot log in yet. No API-key fallback is enabled.

@@ -1,6 +1,7 @@
 import json
 import pytest
 from bstock_web3.mcp_http import DiscoveryHTTP
+from bstock_web3.mcp_readonly import ReadOnlyHTTP
 from bstock_web3.mcp_discovery import DiscoveryClient
 
 
@@ -72,3 +73,20 @@ def test_invalid_envelope_does_not_accept_session(bad_id):
             DiscoveryClient(transport).initialize()
         assert not transport._initialized
         assert transport._session_id is None
+
+
+def test_readonly_http_allows_tools_call_but_discovery_transport_does_not():
+    session = Session("application/json")
+    transport = ReadOnlyHTTP("test-token", session=session)
+    transport._initialized = True
+    reply = transport({"jsonrpc":"2.0", "id":7, "method":"tools/call",
+                       "params":{"name":"spot.getAccount", "arguments":{}}})
+    assert reply["result"] == {"tools":[]}
+    calls = len(session.calls)
+    with pytest.raises(ValueError, match="allowlist"):
+        transport({"jsonrpc":"2.0", "id":8, "method":"tools/call",
+                   "params":{"name":"spot.newOrder", "arguments":{}}})
+    assert len(session.calls) == calls
+    with DiscoveryHTTP("test-token", session=Session("application/json")) as discovery:
+        with pytest.raises(ValueError, match="prohibited"):
+            discovery({"method":"tools/call"})

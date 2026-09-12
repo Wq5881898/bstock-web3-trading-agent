@@ -8,6 +8,8 @@ from bstock_web3.mcp_discovery import DiscoveryClient
 
 
 class DiscoveryHTTP:
+    ALLOWED_METHODS = frozenset(("initialize", "notifications/initialized", "tools/list"))
+
     def __init__(self, access_token, *, session=None):
         if not isinstance(access_token, str) or not access_token or any(ord(c) < 33 or ord(c) > 126 for c in access_token):
             raise ValueError("Invalid access token")
@@ -34,7 +36,7 @@ class DiscoveryHTTP:
 
     def __call__(self, message):
         method = message.get("method")
-        if method not in ("initialize", "notifications/initialized", "tools/list"):
+        if method not in self.ALLOWED_METHODS:
             raise ValueError("Discovery-only transport: method prohibited")
         if not self._token:
             raise ValueError("Transport closed")
