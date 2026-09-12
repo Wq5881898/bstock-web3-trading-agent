@@ -28,6 +28,6 @@ The latch survives process restart and clears only after an explicit manual-resu
 
 ## MCP接线边界 / MCP wiring boundary
 
-下一阶段的MCP宿主适配器必须先查询Agentic子账户、交易权限、余额、持仓、未决订单和成交，形成新鲜快照；通过闸门后才能提交，并以客户端订单ID实现幂等，随后查询终态。当前没有生产适配器调用此闸门，也没有取消逐笔确认或启用无人值守实盘。
+离线的MCP账户核对证据、限时授权绑定和幂等执行日志现已由`execution_safety.py`实现；详见[MCP账户核对与幂等执行](MCP_EXECUTION_SAFETY.md)。未来MCP宿主仍必须实际查询Agentic子账户、交易权限、余额、持仓、未决订单和成交，形成新鲜快照后才能提交。当前没有生产适配器调用此闸门，也没有取消逐笔确认或启用无人值守实盘。
 
-The next MCP-host adapter must first query the Agentic sub-account, permissions, balance, position, pending orders and fills to construct a fresh snapshot. Only an allowed decision may be submitted, with client-order-id idempotency followed by terminal reconciliation. No production adapter currently calls this gate, and per-order confirmation has not been removed or unattended live trading enabled.
+Offline MCP reconciliation evidence, expiring arming and the idempotent execution journal are now implemented in `execution_safety.py`; see [MCP reconciliation and idempotent execution](MCP_EXECUTION_SAFETY.md). A future MCP host must still perform the real Agentic-account, permission, balance, position, pending-order and fill queries before submission. No production adapter currently calls this gate, and per-order confirmation has not been removed or unattended live trading enabled.
