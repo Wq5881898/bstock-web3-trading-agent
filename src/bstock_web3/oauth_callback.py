@@ -1,7 +1,6 @@
 """Short-lived loopback listener. No browser, Binance requests or credential files."""
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from queue import Queue, Empty
-import secrets
 from threading import Thread
 
 from bstock_web3.oauth_flow import AuthorizationAttempt
@@ -10,7 +9,8 @@ from bstock_web3.oauth_flow import AuthorizationAttempt
 class CallbackListener:
     """Use as a context manager; close after receiving the sensitive token form."""
 
-    def __init__(self, client_id):
+    def __init__(self, client_id,
+                 callback_path="/callback/bstock-web3-trading-agent"):
         self._results = Queue(maxsize=1)
         self._closed = False
         self._completed = False
@@ -52,7 +52,8 @@ class CallbackListener:
         self._server = HTTPServer(("127.0.0.1", 0), Handler)
         self._authority = f"127.0.0.1:{self._server.server_port}"
         try:
-            self.attempt = AuthorizationAttempt(client_id, f"http://{self._authority}/callback/{secrets.token_urlsafe(24)}")
+            self.attempt = AuthorizationAttempt(
+                client_id, f"http://{self._authority}{callback_path}")
         except Exception:
             self._server.server_close()
             raise

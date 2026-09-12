@@ -7,6 +7,8 @@ from bstock_web3.oauth_callback import CallbackListener
 
 def test_loopback_roundtrip_no_token_exchange():
     with CallbackListener("https://example.com/client.json") as listener:
+        assert listener.attempt.redirect_uri.endswith(
+            "/callback/bstock-web3-trading-agent")
         query = parse_qs(urlsplit(listener.attempt.authorization_url()).query)
         url = listener.attempt.redirect_uri + "?" + urlencode({"state": query["state"][0], "code": "test-only"})
         with requests.Session() as client:

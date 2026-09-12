@@ -1,0 +1,14 @@
+{
+  "client_id": "https://wq5881898.github.io/bstock-web3-trading-agent/oauth/bstock-web3-agent.json",
+  "client_uri": "https://github.com/Wq5881898/bstock-web3-trading-agent",
+  "application_type": "native",
+  "redirect_uris": [
+    "http://127.0.0.1/callback/bstock-web3-trading-agent",
+    "http://localhost/callback/bstock-web3-trading-agent"
+  ],
+  "token_endpoint_auth_method": "none",
+  "token_endpoint_auth_methods_supported": ["none"],
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
+  "client_name": "bStock Web3 Trading Agent"
+}
