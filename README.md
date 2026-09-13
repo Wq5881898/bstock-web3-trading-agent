@@ -61,7 +61,7 @@ it is **not an unattended live-trading release**.
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
-| 独立MCP只读宿主 / Standalone read-only MCP host | PKCE/state、本机回调、仅内存Token交换、发现协议、固定端点HTTP/SSE、双层只读白名单及成交/订单有界分页 / PKCE/state, loopback callback, session-only token exchange, discovery, pinned HTTP/SSE, defense-in-depth read allowlist and bounded fill/order pagination | 离线实现可用；公网Client Metadata和桌面接线未完成 / Offline implementation available; public client metadata and desktop wiring pending |
+| 独立MCP只读宿主 / Standalone read-only MCP host | PKCE/state、本机回调、仅内存Token交换、发现协议、固定端点HTTP/SSE、双层只读白名单、成交/订单有界分页及一次性账户读取命令 / PKCE/state, loopback callback, session-only token exchange, discovery, pinned HTTP/SSE, defense-in-depth read allowlist, bounded pagination and a one-shot account-read command | 本地实现可用；公网Client Metadata和桌面接线未完成 / Local implementation available; public client metadata and desktop wiring pending |
 
 ### 默认模拟风控 / Default Paper Controls
 
@@ -85,8 +85,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**320项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **320 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**331项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **331 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -104,6 +104,22 @@ market snapshot and do not trigger additional wallet calls or orders.
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
   public OAuth client metadata, desktop login wiring,
   a user-confirmed MCP order adapter and sustained live acceptance.
+
+独立只读连接命令（不会下单）：
+
+```powershell
+bstock-mcp-read --symbol BTCUSDT
+```
+
+它会先验证项目自己的公网OAuth Client Metadata，再打开Binance授权页；Token仅保存在本次进程内，读取一次账户摘要后立即关闭MCP会话。Client Metadata尚未公开可访问时会在打开授权页之前失败关闭。
+
+Standalone read-only connection (never places an order):
+
+```powershell
+bstock-mcp-read --symbol BTCUSDT
+```
+
+The command validates the project's public OAuth Client Metadata before opening Binance authorization. The token remains in this process only, and the MCP session closes immediately after one account summary. It fails closed before authorization while the metadata document is not publicly reachable.
 
 技术说明 / Technical notes:
 [模拟风控 / Paper risk](docs/PAPER_RISK.md) ·
@@ -264,7 +280,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `320 passed`
+- 本地自动化测试 / Local automated tests: `331 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

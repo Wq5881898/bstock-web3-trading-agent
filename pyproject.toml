@@ -23,6 +23,7 @@ bstock-history = "bstock_web3.history:main"
 bstock-backtest = "bstock_web3.backtest:main"
 bstock-desktop = "bstock_web3.desktop:main"
 bstock-mcp-plan = "bstock_web3.mcp_cli:main"
+bstock-mcp-read = "bstock_web3.mcp_account_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

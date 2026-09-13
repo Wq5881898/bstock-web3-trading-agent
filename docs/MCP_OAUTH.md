@@ -22,4 +22,14 @@ Binance官方MCP说明明确要求每次订单、撤单和内部转账在执行�
 
 The official Binance MCP guide requires user confirmation before every order, cancellation and internal transfer. The MCP product can automate market data, strategy, risk and order preparation, but submission remains user-confirmed in the desktop UI; it cannot be presented as fully unattended live trading. If unattended execution remains mandatory, another official interface requires a separate discussion and explicit approval. No API-key route is enabled.
 
+## 一次性只读验证 / One-shot read-only verification
+
+安装项目后可运行`bstock-mcp-read --symbol BTCUSDT`。命令按以下固定顺序执行：验证项目Client Metadata、启动随机端口本机回调、显示并打开Binance授权页、交换仅内存Token、初始化MCP、发现七个只读Spot工具、读取账户/挂单/成交/订单/手续费/规则/盘口，最后关闭传输并清除其Token副本。终端只输出裁剪后的账户摘要，不输出Token、授权码、完整MCP响应或服务端错误正文。
+
+After installation, run `bstock-mcp-read --symbol BTCUSDT`. It validates the project metadata, binds a random-port loopback callback, displays and opens Binance authorization, exchanges a memory-only token, initializes MCP, discovers the seven allowlisted Spot readers, collects the bounded snapshot, and closes the transport. Terminal output is a reduced account summary; it never prints the token, authorization code, complete MCP payloads or server-controlled error bodies.
+
+本轮离线验证：Python 3.11完整回归331项通过，源码编译与依赖检查通过。默认公网metadata尚不可用时，命令已验证会在浏览器授权和Token交换前失败关闭；这不是一次真实账户登录验收。
+
+Offline validation for this revision: 331 Python 3.11 tests passed, with source compilation and dependency checks also passing. The default command was verified to fail closed before browser authorization or token exchange while the public metadata is unavailable; this is not a live account-login acceptance.
+
 官方资料 / Official reference: [Binance MCP Server](https://developers.binance.com/en/docs/agent-native/mcp-server/agentic).
