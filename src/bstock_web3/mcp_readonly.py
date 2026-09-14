@@ -126,12 +126,14 @@ class SpotReadBundle:
     book: dict
 
 
-def _paginate(client, tool, symbol, cursor_name, row_id, max_pages):
+def _paginate(client, tool, symbol, cursor_name, row_id, max_pages, cancelled):
     if type(max_pages) is not int or not 1 <= max_pages <= 100:
         raise ValueError("Invalid MCP pagination bound")
     rows, cursor = [], 0
     seen = set()
     for _ in range(max_pages):
+        if cancelled():
+            raise ValueError("MCP read cancelled")
         page = client.call(tool, {"symbol":symbol, cursor_name:cursor,
                                   "limit":1000})
         if not isinstance(page, list) or len(page) > 1000:
@@ -155,18 +157,24 @@ def _paginate(client, tool, symbol, cursor_name, row_id, max_pages):
 
 
 def collect_spot_reads(client: ReadOnlyMcpClient, symbol: str,
-                       *, max_pages=20) -> SpotReadBundle:
+                       *, max_pages=20, cancelled=lambda:False) -> SpotReadBundle:
     """Collect one bounded snapshot. Every operation is on the allowlist."""
-    account = client.call("spot.getAccount", {"omitZeroBalances":True})
-    open_orders = client.call("spot.getOpenOrders", {"symbol":symbol})
+    if not callable(cancelled):
+        raise ValueError("Invalid cancellation callback")
+    def call(tool, arguments):
+        if cancelled():
+            raise ValueError("MCP read cancelled")
+        return client.call(tool, arguments)
+    account = call("spot.getAccount", {"omitZeroBalances":True})
+    open_orders = call("spot.getOpenOrders", {"symbol":symbol})
     trades = _paginate(client, "spot.myTrades", symbol, "fromId", "id",
-                       max_pages)
+                       max_pages, cancelled)
     orders = _paginate(client, "spot.allOrders", symbol, "orderId", "orderId",
-                       max_pages)
-    commission = client.call("spot.accountCommission", {"symbol":symbol})
-    exchange_info = client.call("spot.exchangeInfo", {
+                       max_pages, cancelled)
+    commission = call("spot.accountCommission", {"symbol":symbol})
+    exchange_info = call("spot.exchangeInfo", {
         "symbol":symbol, "showPermissionSets":True})
-    book = client.call("spot.tickerBookTicker", {"symbol":symbol,
+    book = call("spot.tickerBookTicker", {"symbol":symbol,
                                                   "symbolStatus":"TRADING"})
     if not isinstance(account, dict) or not isinstance(open_orders, list) \
             or not isinstance(commission, dict) \

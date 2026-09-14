@@ -92,9 +92,9 @@ bstock-backtest --help
 bstock-mcp-plan --help
 ```
 
-当前开发版的预期测试结果是 `331 passed`。测试失败时不要继续连接实盘通道。
+当前开发版的预期测试结果是 `338 passed`。测试失败时不要继续连接实盘通道。
 
-For the current development revision, the expected result is `331 passed`. Do not continue to a live route
+For the current development revision, the expected result is `338 passed`. Do not continue to a live route
 if tests fail.
 
 ## 6. 第一次运行：模拟盘 / First Run: Paper Mode
@@ -179,6 +179,16 @@ Do not paste the endpoint into a normal chat or open it directly in a browser. A
 through the AI client's MCP configuration and complete OAuth there.
 
 ### 9.2 先做只读连接测试
+
+本项目可以从命令行运行：
+
+```powershell
+bstock-mcp-read --symbol BTCUSDT
+```
+
+也可以打开桌面程序的“账户 / Account”页，输入Spot交易对后点击“连接并只读一次”。两种入口都只读取一次并立即关闭会话，没有下单按钮。项目自己的公网Client Metadata尚未可访问时，它们会在打开授权页之前停止。
+
+Run `bstock-mcp-read --symbol BTCUSDT`, or use “Connect & read once” on the desktop Account tab. Both paths collect one read-only snapshot and immediately close the session; neither exposes an order button. They stop before authorization while the project's public Client Metadata is unavailable.
 
 在已连接 MCP 的 Agent 中输入：
 

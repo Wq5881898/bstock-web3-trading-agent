@@ -49,21 +49,26 @@ def desktop_state_file(symbol: str, mode: str) -> Path:
     return runtime_root / f"{safe_symbol}_{mode}.json"
 
 
-def create_monitor_class(engine_factory=None):
+def create_monitor_class(engine_factory=None, account_reader=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
+    from .mcp_account_runner import McpAccountRunner
     from .median_monitor import MedianMonitor
     if engine_factory is None:
         from .strategy_registry import strategy_spec
         engine_factory = lambda config: (MedianMonitor(config)
             if strategy_spec(config.strategy_kind).input_kind == "aggregate-trades" else BStockEngine(config))
+    if account_reader is None:
+        from .mcp_account import read_spot_account_once
+        account_reader = read_spot_account_once
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
             super().__init__()
             self.engine = None
             self.runner = None
+            self.account_runner = None
             self.state_lock = None
             self.closing = False
             self._last_risk = ""
@@ -284,6 +289,30 @@ def create_monitor_class(engine_factory=None):
             self.tabs.addTab(strategy_page, "策略 / Strategies")
             account_page = QtWidgets.QWidget()
             account_layout = QtWidgets.QVBoxLayout(account_page)
+            mcp_row = QtWidgets.QHBoxLayout()
+            self.mcp_symbol = QtWidgets.QLineEdit("BTCUSDT")
+            self.mcp_symbol.setMaximumWidth(140)
+            self.mcp_connect = QtWidgets.QPushButton(
+                "连接并只读一次 / Connect && read once")
+            self.mcp_connect.clicked.connect(self.start_mcp_read)
+            mcp_row.addWidget(QtWidgets.QLabel("MCP Spot标的 / Symbol"))
+            mcp_row.addWidget(self.mcp_symbol)
+            mcp_row.addWidget(self.mcp_connect)
+            mcp_row.addStretch(1)
+            account_layout.addLayout(mcp_row)
+            self.mcp_status = QtWidgets.QLabel(
+                "未连接；只读功能不会下单 / Disconnected; read-only, no orders")
+            self.mcp_status.setWordWrap(True)
+            account_layout.addWidget(self.mcp_status)
+            self.mcp_auth_url = QtWidgets.QLineEdit()
+            self.mcp_auth_url.setReadOnly(True)
+            self.mcp_auth_url.setPlaceholderText(
+                "授权地址仅在本次登录期间显示 / Authorization URL appears during login")
+            account_layout.addWidget(self.mcp_auth_url)
+            self.mcp_account_summary = QtWidgets.QLabel(
+                "尚无MCP账户快照 / No MCP account snapshot")
+            self.mcp_account_summary.setWordWrap(True)
+            account_layout.addWidget(self.mcp_account_summary)
             self.account_summary = QtWidgets.QLabel("尚无账户快照 / No account snapshot")
             self.account_summary.setWordWrap(True)
             account_layout.addWidget(self.account_summary)
@@ -515,9 +544,73 @@ def create_monitor_class(engine_factory=None):
                 self.risk_label.setText("指令排队，下一轮评估处理 / Queued for next evaluation")
                 self.poll()
 
+        def start_mcp_read(self):
+            if self.account_runner is not None:
+                return
+            symbol = self.mcp_symbol.text().strip().upper()
+            if not re.fullmatch(r"[A-Z0-9]{1,32}", symbol):
+                self.mcp_status.setText(
+                    "标的格式错误 / Invalid Spot symbol")
+                return
+            self.mcp_symbol.setText(symbol)
+            self.mcp_symbol.setEnabled(False)
+            self.mcp_connect.setEnabled(False)
+            self.mcp_auth_url.clear()
+            self.mcp_status.setText(
+                "正在校验客户端身份并等待Binance授权 / Validating client and waiting for Binance authorization")
+            self.account_runner = McpAccountRunner(account_reader)
+            if not self.account_runner.start(symbol):
+                self.account_runner.close()
+                self.account_runner = None
+                self.mcp_symbol.setEnabled(True)
+                self.mcp_connect.setEnabled(True)
+                self.mcp_status.setText("无法启动只读连接 / Cannot start read-only connection")
+
+        def collect_account(self):
+            if self.account_runner is None:
+                return
+            url = self.account_runner.take_url()
+            if url is not None:
+                self.mcp_auth_url.setText(url)
+                self.mcp_status.setText(
+                    "授权页已打开；如未打开请复制上方地址 / Authorization opened; copy the URL above if needed")
+            future = self.account_runner.take()
+            if future is None:
+                return
+            try:
+                summary = future.result()
+                balances = " · ".join(
+                    f'{row["asset"]}: free={row["free"]}, locked={row["locked"]}'
+                    for row in summary.balances) or "none"
+                self.mcp_account_summary.setText(
+                    f"Agentic Spot UID={summary.uid} · canTrade={summary.can_trade} · "
+                    f"{summary.symbol} bid={summary.bid_price}, ask={summary.ask_price}\n"
+                    f"Balances: {balances}\n"
+                    f"openOrders={summary.open_order_count} · trades={summary.trade_count} · orders={summary.order_count}")
+                self.mcp_status.setText(
+                    "只读快照完成，Token和MCP会话已关闭 / Read complete; token and MCP session closed")
+            except Exception as exc:
+                if not self.closing:
+                    self.mcp_status.setText(
+                        f"只读连接失败 / Read-only connection failed: {exc}")
+            finally:
+                self.mcp_auth_url.clear()
+                self.account_runner.close()
+                self.account_runner = None
+                if not self.closing:
+                    self.mcp_symbol.setEnabled(True)
+                    self.mcp_connect.setEnabled(True)
+                else:
+                    self.finish_stop()
+
         def finish_stop(self):
             if self.runner is not None and self.runner.future is not None:
                 return
+            if self.account_runner is not None:
+                if self.account_runner.future is not None:
+                    return
+                self.account_runner.close()
+                self.account_runner = None
             if self.runner is not None:
                 self.runner.close()
                 if not self.runner.close_future.done():
@@ -544,10 +637,13 @@ def create_monitor_class(engine_factory=None):
                 self.close()
 
         def closeEvent(self, event):
-            if self.runner is not None:
+            if self.runner is not None or self.account_runner is not None:
                 self.closing = True
                 self.timer.stop()
                 self.start.setEnabled(False)
+                self.mcp_connect.setEnabled(False)
+                if self.account_runner is not None:
+                    self.account_runner.cancel()
                 self.status.setText("等待当前评估安全结束 / Waiting for evaluation to finish")
                 event.ignore()
                 self.finish_stop()
@@ -556,7 +652,10 @@ def create_monitor_class(engine_factory=None):
             event.accept()
 
         def collect(self):
+            self.collect_account()
             if self.runner is None:
+                if self.closing:
+                    self.finish_stop()
                 return
             future = self.runner.take()
             if future is None:

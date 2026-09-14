@@ -14,7 +14,7 @@ The local bstock-web3-engine checkout is authoritative. The adjacent binance-age
 
 The oauth_flow, oauth_callback, mcp_discovery and mcp_http modules plus four test groups now use internal bstock_web3 imports, with no runtime dependency on the adjacent project. Full local suite: 47 passed.
 
-授权基础现已提供PKCE/state、短期本机回调、仅内存Token交换、只读目录协议、固定端点HTTP/SSE传输、双层只读工具白名单和有界分页。独立客户端仍缺公网Client Metadata URL和桌面授权接线；Token不会持久化，重启必须重新登录。真实MCP只读账户验收已通过，但由当前Codex宿主完成，不等于独立桌面授权已经完成。
+授权基础现已提供PKCE/state、短期本机回调、仅内存Token交换、只读目录协议、固定端点HTTP/SSE传输、双层只读工具白名单、有界分页、一次性CLI和桌面账户页。独立客户端仍缺可访问的公网Client Metadata URL和首次真实登录验收；Token不会持久化，重启必须重新登录。真实MCP只读账户验收已通过，但由当前Codex宿主完成，不等于独立桌面授权已经完成。
 
 The authorization foundation now provides PKCE/state, loopback callbacks, session-only token exchange, discovery, pinned HTTP/SSE, defense-in-depth read allowlisting and bounded pagination. The standalone client still needs a public client-metadata URL and desktop consent wiring; tokens are not persisted and restart requires login. Real MCP account reads passed through the current Codex host, which does not establish standalone desktop authorization.
 

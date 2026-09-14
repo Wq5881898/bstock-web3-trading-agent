@@ -28,8 +28,12 @@ The official Binance MCP guide requires user confirmation before every order, ca
 
 After installation, run `bstock-mcp-read --symbol BTCUSDT`. It validates the project metadata, binds a random-port loopback callback, displays and opens Binance authorization, exchanges a memory-only token, initializes MCP, discovers the seven allowlisted Spot readers, collects the bounded snapshot, and closes the transport. Terminal output is a reduced account summary; it never prints the token, authorization code, complete MCP payloads or server-controlled error bodies.
 
-本轮离线验证：Python 3.11完整回归331项通过，源码编译与依赖检查通过。默认公网metadata尚不可用时，命令已验证会在浏览器授权和Token交换前失败关闭；这不是一次真实账户登录验收。
+桌面“账户 / Account”页也提供“连接并只读一次”。授权等待、网络读取和取消均在单一后台线程执行；界面保持响应，关闭窗口会请求取消并等待资源安全释放。页面只显示裁剪后的账户快照与临时授权URL，没有下单按钮，不会把Token写入参数、日志或运行目录。
 
-Offline validation for this revision: 331 Python 3.11 tests passed, with source compilation and dependency checks also passing. The default command was verified to fail closed before browser authorization or token exchange while the public metadata is unavailable; this is not a live account-login acceptance.
+The desktop Account tab also provides “Connect & read once.” Authorization waiting, network reads and cancellation run on one background worker; the UI remains responsive, and window close requests cancellation before releasing resources. The tab shows only a reduced account snapshot and temporary authorization URL. It has no order button and never writes the token to preferences, logs or runtime files.
+
+本轮离线验证：Python 3.11完整回归338项通过，源码编译与依赖检查通过。默认公网metadata尚不可用时，命令和桌面入口都会在浏览器授权和Token交换前失败关闭；这不是一次真实账户登录验收。
+
+Offline validation for this revision: 338 Python 3.11 tests passed, with source compilation and dependency checks also passing. Both CLI and desktop entry fail closed before browser authorization or token exchange while public metadata is unavailable; this is not a live account-login acceptance.
 
 官方资料 / Official reference: [Binance MCP Server](https://developers.binance.com/en/docs/agent-native/mcp-server/agentic).

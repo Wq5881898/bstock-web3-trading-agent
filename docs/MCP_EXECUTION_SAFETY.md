@@ -66,6 +66,6 @@ SUBMITTED/FILLED/REJECTED；超时则 UNKNOWN → 只查单
 
 ## 仍未完成 / Still pending
 
-当前仓库尚未实现生产MCP `tools/call`适配器、Agent OS工具名/参数的运行时发现映射、真实Agentic子账户对账或无人值守实盘验收。跨进程锁已作为独立标准库组件提供，并由安全准备入口强制要求，但尚未接入生产MCP宿主。现有`mcp_bridge.py`逐笔人工确认演示通道保持不变。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
+当前仓库已有只读MCP `tools/call`适配器、运行时工具发现、Agentic Spot快照对账以及CLI/桌面一次性读取入口，但尚未实现任何MCP写适配器，也没有把执行安全日志接到真实下单调用。跨进程锁已作为独立标准库组件提供，并由安全准备入口强制要求。现有`mcp_bridge.py`逐笔人工确认计划通道保持不变。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
 
-The repository still has no production MCP `tools/call` adapter, runtime mapping of discovered Agent OS tool names/arguments, real Agentic-account reconciliation or unattended live acceptance. A standalone standard-library cross-process lock is now available and mandatory at the safe-preparation entry point, but is not yet wired to a production MCP host. The existing per-order-confirmed `mcp_bridge.py` demonstration remains unchanged. An API-key trading fallback still requires prior discussion and explicit user approval.
+The repository now has a read-only MCP `tools/call` adapter, runtime discovery, Agentic Spot reconciliation, and one-shot CLI/desktop reads. It still has no MCP write adapter and does not connect the execution journal to a live submission call. A standalone cross-process lock remains mandatory at the safe-preparation entry point. The per-order-confirmed `mcp_bridge.py` plan channel remains unchanged. An API-key trading fallback still requires prior discussion and explicit user approval.

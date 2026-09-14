@@ -66,6 +66,10 @@ def test_summary_exposes_only_bounded_account_fields():
         0, 1, 1, "BTCUSDT", "100", "101")
     assert set(result.to_dict()) == {"uid", "accountType", "canTrade", "balances",
         "openOrderCount", "tradeCount", "orderCount", "symbol", "bidPrice", "askPrice"}
+    excessive = bundle()
+    excessive.account["balances"] *= 201
+    with pytest.raises(ValueError, match="Excessive"):
+        summarize_spot_bundle(excessive, "BTCUSDT")
 
 
 def test_one_shot_flow_closes_callback_token_and_mcp(monkeypatch):
@@ -93,7 +97,8 @@ def test_one_shot_flow_closes_callback_token_and_mcp(monkeypatch):
         def __init__(self, transport): pass
         def initialize(self): events.append("initialized")
     monkeypatch.setattr("bstock_web3.mcp_account.ReadOnlyMcpClient", Client)
-    monkeypatch.setattr("bstock_web3.mcp_account.collect_spot_reads", lambda client,symbol: bundle())
+    monkeypatch.setattr("bstock_web3.mcp_account.collect_spot_reads",
+                        lambda client, symbol, **kwargs: bundle())
     summary = read_spot_account_once("BTCUSDT", client_id=CLIENT,
         announce_url=lambda url: events.append(("url",url)),
         browser_open=lambda url: events.append(("browser",url)),
@@ -114,3 +119,12 @@ def test_invalid_symbol_fails_before_metadata_network():
         read_spot_account_once("btc/usdt", client_id=CLIENT,
                                metadata_session=session)
     assert session.calls == []
+
+
+def test_pre_cancelled_read_fails_before_metadata_or_browser():
+    session=MetadataSession(); browser=[]
+    with pytest.raises(ValueError, match="cancelled"):
+        read_spot_account_once("BTCUSDT", client_id=CLIENT,
+            metadata_session=session, cancelled=lambda:True,
+            browser_open=browser.append)
+    assert session.calls == [] and browser == []

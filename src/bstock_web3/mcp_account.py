@@ -111,6 +111,8 @@ def summarize_spot_bundle(bundle: SpotReadBundle, symbol: str) -> SpotAccountSum
             or bundle.book.get("symbol") != symbol):
         raise ValueError("Invalid MCP Spot account snapshot")
     balances = []
+    if len(account["balances"]) > 200:
+        raise ValueError("Excessive MCP Spot balances")
     for row in account["balances"]:
         if (not isinstance(row, dict) or not isinstance(row.get("asset"), str)
                 or not isinstance(row.get("free"), str)
@@ -144,6 +146,7 @@ def read_spot_account_once(
     listener_factory=CallbackListener,
     token_exchange_factory=SessionTokenExchange,
     transport_factory=ReadOnlyHTTP,
+    cancelled=lambda: False,
 ) -> SpotAccountSummary:
     """Authorize once, collect an allowlisted snapshot, then erase the session."""
     if (not isinstance(symbol, str) or not symbol.isalnum()
@@ -151,7 +154,13 @@ def read_spot_account_once(
         raise ValueError("Invalid MCP Spot symbol")
     if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 300:
         raise ValueError("Invalid OAuth timeout")
+    if not callable(cancelled):
+        raise ValueError("Invalid cancellation callback")
+    if cancelled():
+        raise ValueError("MCP account read cancelled")
     validate_client_metadata(client_id, session=metadata_session)
+    if cancelled():
+        raise ValueError("MCP account read cancelled")
     deadline = time.monotonic() + timeout_seconds
     with listener_factory(client_id, CALLBACK_PATH) as listener:
         url = listener.attempt.authorization_url()
@@ -162,16 +171,22 @@ def read_spot_account_once(
             pass  # the announced URL remains available for manual opening
         form = None
         while form is None:
+            if cancelled():
+                raise ValueError("MCP account read cancelled")
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ValueError("OAuth authorization timed out")
-            form = listener.receive(min(5, remaining))
+            form = listener.receive(min(.25, remaining))
+    if cancelled():
+        raise ValueError("MCP account read cancelled")
     with token_exchange_factory() as exchange:
         grant = exchange.exchange(form)
     if not grant.usable():
         raise ValueError("OAuth access token expired")
+    if cancelled():
+        raise ValueError("MCP account read cancelled")
     with transport_factory(grant.access_token) as transport:
         client = ReadOnlyMcpClient(transport)
         client.initialize()
-        bundle = collect_spot_reads(client, symbol)
+        bundle = collect_spot_reads(client, symbol, cancelled=cancelled)
     return summarize_spot_bundle(bundle, symbol)

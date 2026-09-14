@@ -98,3 +98,18 @@ def test_symbol_validation_is_fail_closed(symbol):
     client.initialize()
     with pytest.raises(ValueError, match="symbol"):
         client.call("spot.getOpenOrders", {"symbol":symbol})
+
+
+def test_snapshot_cancellation_stops_before_next_read():
+    exchange = Exchange()
+    client = ReadOnlyMcpClient(exchange)
+    client.initialize()
+    checks = []
+    def cancelled():
+        checks.append(True)
+        return len(checks) >= 3
+    with pytest.raises(ValueError, match="cancelled"):
+        collect_spot_reads(client, "BTCUSDT", cancelled=cancelled)
+    called = [row["params"]["name"] for row in exchange.calls
+              if row.get("method") == "tools/call"]
+    assert called == ["spot.getAccount", "spot.getOpenOrders"]
