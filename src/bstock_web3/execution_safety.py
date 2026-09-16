@@ -247,7 +247,11 @@ class ExecutionJournal:
             updated_at_ms=now_ms,
         )
         self._records[fingerprint] = record
-        self._save()
+        try:
+            self._save()
+        except Exception:
+            del self._records[fingerprint]
+            raise
         return record, True
 
     def transition(self, fingerprint: str, phase: ExecutionPhase, *, now_ms: int,
@@ -257,6 +261,8 @@ class ExecutionJournal:
         if not isinstance(phase, ExecutionPhase):
             raise ValueError("Invalid execution phase")
         current = self.get(fingerprint)
+        if now_ms < current.updated_at_ms:
+            raise ValueError("Execution timestamp moved backwards")
         if phase not in self._TRANSITIONS[current.phase]:
             raise RuntimeError(
                 f"Invalid execution transition {current.phase}->{phase}")
@@ -278,7 +284,11 @@ class ExecutionJournal:
                        detail=detail)
         record = ExecutionRecord(**payload)
         self._records[fingerprint] = record
-        self._save()
+        try:
+            self._save()
+        except Exception:
+            self._records[fingerprint] = current
+            raise
         return record
 
     def get(self, fingerprint: str):

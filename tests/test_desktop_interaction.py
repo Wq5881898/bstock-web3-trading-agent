@@ -380,3 +380,25 @@ def test_window_close_cancels_pending_mcp_login(monkeypatch, tmp_path):
     window.close()
     assert window.isVisible()
     pump(app, lambda: window.account_runner is None and not window.isVisible())
+
+
+def test_mcp_retry_failure_does_not_display_old_balance(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    attempts=[]
+    def reader(symbol, **kwargs):
+        attempts.append(symbol)
+        if len(attempts) == 1:
+            return mcp_summary()
+        raise ValueError("MCP authorization unavailable")
+    window = create_monitor_class(lambda config: None, reader)()
+    app = QtWidgets.QApplication.instance()
+    try:
+        window.mcp_connect.click()
+        pump(app, lambda: window.account_runner is None)
+        assert "190.42" in window.mcp_account_summary.text()
+        window.mcp_connect.click()
+        assert "190.42" not in window.mcp_account_summary.text()
+        pump(app, lambda: window.account_runner is None)
+        assert "No valid snapshot" in window.mcp_account_summary.text()
+    finally:
+        window.close()

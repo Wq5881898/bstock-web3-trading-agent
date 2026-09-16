@@ -311,6 +311,7 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             account_layout.addWidget(self.mcp_auth_url)
             self.mcp_account_summary = QtWidgets.QLabel(
                 "尚无MCP账户快照 / No MCP account snapshot")
+            self.mcp_account_summary.setTextFormat(QtCore.Qt.PlainText)
             self.mcp_account_summary.setWordWrap(True)
             account_layout.addWidget(self.mcp_account_summary)
             self.account_summary = QtWidgets.QLabel("尚无账户快照 / No account snapshot")
@@ -556,6 +557,8 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             self.mcp_symbol.setEnabled(False)
             self.mcp_connect.setEnabled(False)
             self.mcp_auth_url.clear()
+            self.mcp_account_summary.setText(
+                "等待新快照；旧快照已清除 / Waiting for fresh snapshot; previous snapshot cleared")
             self.mcp_status.setText(
                 "正在校验客户端身份并等待Binance授权 / Validating client and waiting for Binance authorization")
             self.account_runner = McpAccountRunner(account_reader)
@@ -591,6 +594,8 @@ def create_monitor_class(engine_factory=None, account_reader=None):
                     "只读快照完成，Token和MCP会话已关闭 / Read complete; token and MCP session closed")
             except Exception as exc:
                 if not self.closing:
+                    self.mcp_account_summary.setText(
+                        "本次无有效快照 / No valid snapshot from this attempt")
                     self.mcp_status.setText(
                         f"只读连接失败 / Read-only connection failed: {exc}")
             finally:

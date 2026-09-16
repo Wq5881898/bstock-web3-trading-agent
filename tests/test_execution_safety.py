@@ -187,3 +187,40 @@ def test_unattended_preparation_requires_held_execution_lock(tmp_path):
         armed(), journal, signal_key=SIGNAL_KEY, now_ms=NOW)
     assert not result.decision.allowed
     assert result.decision.reasons == ("execution_lock_not_held",)
+
+
+def test_prepare_persistence_failure_rolls_back_memory(tmp_path, monkeypatch):
+    journal = ExecutionJournal(tmp_path / "journal.json")
+    def fail():
+        raise OSError("injected disk failure")
+    monkeypatch.setattr(journal, "_save", fail)
+    with pytest.raises(OSError):
+        journal.prepare(intent(), evidence().to_snapshot(),
+            signal_key=SIGNAL_KEY, amount_kind="QUOTE", amount=Decimal("100"),
+            now_ms=NOW)
+    assert journal.records() == ()
+    assert not journal.path.exists()
+
+
+def test_transition_persistence_failure_preserves_disk_and_memory(tmp_path, monkeypatch):
+    journal = ExecutionJournal(tmp_path / "journal.json")
+    record, _ = journal.prepare(intent(), evidence().to_snapshot(),
+        signal_key=SIGNAL_KEY, amount_kind="QUOTE", amount=Decimal("100"), now_ms=NOW)
+    before = journal.path.read_bytes()
+    def fail():
+        raise OSError("injected disk failure")
+    monkeypatch.setattr(journal, "_save", fail)
+    with pytest.raises(OSError):
+        journal.transition(record.fingerprint, ExecutionPhase.SUBMITTING, now_ms=NOW+1)
+    assert journal.get(record.fingerprint) == record
+    assert journal.path.read_bytes() == before
+    assert ExecutionJournal(journal.path).get(record.fingerprint) == record
+
+
+def test_execution_transition_rejects_clock_rewind():
+    journal = ExecutionJournal()
+    record, _ = journal.prepare(intent(), evidence().to_snapshot(),
+        signal_key=SIGNAL_KEY, amount_kind="QUOTE", amount=Decimal("100"), now_ms=NOW)
+    with pytest.raises(ValueError, match="backwards"):
+        journal.transition(record.fingerprint, ExecutionPhase.SUBMITTING, now_ms=NOW-1)
+    assert journal.get(record.fingerprint) == record
