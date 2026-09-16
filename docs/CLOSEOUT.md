@@ -37,6 +37,10 @@ This revision is not unattended live trading. MCP writes remain subject to the o
 
 ## 本轮证据 / Evidence
 
+后续执行器更新：已新增逐笔确认执行器的离线调用契约、最小Spot过滤器和超时/重启查单测试，详见[MCP确认执行器](MCP_CONFIRMED_EXECUTOR.md)。完整回归现为366项；上方实盘前清单仍然有效，真实写transport、schema匹配、手续费/盘口、资金账本及桌面接线尚未完成。下方342项是前一阶段证据。
+
+Follow-up: an offline confirmed executor, minimal Spot filters and lookup-only recovery are implemented; full regression is now 366 tests. Live write transport/schema, fee/book checks, account accounting and desktop wiring remain pending. The 342-test evidence below records the preceding milestone.
+
 本地Python 3.11完整回归342项通过；源码编译与依赖检查通过。新增测试验证日志写盘故障后的内存/磁盘一致性、时间倒退拒绝与MCP重试失败后旧余额清除。真实OAuth、真实订单与持续实盘不在离线回归的证明范围内。
 
 342 local Python 3.11 tests passed, with source compilation and dependency checks. New tests cover journal persistence failures, clock rewind and removal of stale account balances after a failed retry. Offline regression does not establish live OAuth, order or sustained-market acceptance.

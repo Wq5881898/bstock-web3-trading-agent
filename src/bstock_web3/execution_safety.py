@@ -26,6 +26,7 @@ def _decimal_text(value: Decimal) -> str:
 
 class ExecutionMode(StrEnum):
     OBSERVE_ONLY = "OBSERVE_ONLY"
+    USER_CONFIRMED = "USER_CONFIRMED"
     UNATTENDED = "UNATTENDED"
 
 
@@ -104,7 +105,7 @@ class ExecutionArming:
 
     def block_reasons(self, snapshot: AccountRiskSnapshot, *, now_ms: int):
         reasons = []
-        if self.mode != ExecutionMode.UNATTENDED:
+        if self.mode not in (ExecutionMode.USER_CONFIRMED, ExecutionMode.UNATTENDED):
             reasons.append("observe_only")
         if not self.account_ref or self.account_ref != snapshot.account_ref:
             reasons.append("armed_account_mismatch")
