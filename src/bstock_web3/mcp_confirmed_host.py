@@ -6,6 +6,8 @@ to trade. It is a narrow transport/client boundary for ConfirmedSpotExecutor.
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+import hashlib
+import json
 import re
 
 from .mcp_discovery import DiscoveryClient
@@ -141,6 +143,18 @@ class ConfirmedMcpClient:
         for name in CONFIRMED_WRITE_TOOLS:
             validate_confirmed_schema(name, schemas[name])
         self._schemas, self.ready = schemas, True
+
+    def schema_report(self):
+        if not self.ready:
+            raise ValueError("Initialize before reading MCP schema report")
+        selected = {name:self._schemas[name] for name in
+                    sorted(CONFIRMED_WRITE_TOOLS)}
+        canonical = json.dumps(selected, sort_keys=True, separators=(",", ":"),
+                               ensure_ascii=True, allow_nan=False).encode("ascii")
+        return {"protocolVersion":DiscoveryClient.VERSION,
+            "readToolCount":len(READ_ONLY_TOOLS),
+            "writeTools":sorted(CONFIRMED_WRITE_TOOLS),
+            "writeSchemaSha256":hashlib.sha256(canonical).hexdigest()}
 
     def call(self, tool_name, arguments):
         if not self.ready:

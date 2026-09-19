@@ -12,6 +12,7 @@
 - Spot权益风险账本：明确确认期初基准，按买一价估值，以完整资金流水抵消入金/出金，并从完整成交推导开仓和连亏计数；真实MCP资金流水来源及桌面编排尚未完成。
 - 独立MCP确认会话边界：仅允许Spot读取、下单和按客户端ID查单，双层验证参数并在初始化时检查运行时schema；OAuth/桌面编排和首次真实schema验收尚未完成。
 - 桌面逐笔确认弹窗：显示账户、方向和精确金额，要求一次性短语并在15秒过期，关闭程序自动取消；真实会话和策略事件尚未连接，提交入口保持禁用。
+- MCP schema验收CLI：一次性OAuth后只执行initialize/tools-list，严格校验写工具schema并返回指纹，关闭会话；不读账户、不调用订单工具。
 
 Delivered: a unified tagged strategy library, editable desktop paper trading, public candles, BUY-only loss latches and manual resume, allowlisted MCP reads, reconciliation, memory-only OAuth CLI/desktop wiring, offline execution safety, persistence rollback and stale-account-view prevention.
 
@@ -42,6 +43,10 @@ Before live use: publish the project's client identity, complete user-driven sta
 This revision is not unattended live trading. MCP writes remain subject to the official per-action confirmation policy. An API-key alternative is disabled and requires separate discussion and approval. No account authorization or live order was performed in this closeout.
 
 ## 本轮证据 / Evidence
+
+最新schema验收更新：完整回归442项通过（62.09秒）。新增8项测试覆盖无工具调用的一次性OAuth编排、关闭顺序、预取消、超时参数、浏览器失败回退及稳定schema指纹。公网Client Metadata和首次真实schema发现仍待用户参与。后文434/430/410/390/366/342项均为历史阶段证据。
+
+Latest schema-acceptance update: 442 tests passed in 62.09 seconds. Eight new tests cover no-tool-call one-shot OAuth orchestration, close ordering, pre-cancellation, timeout validation, browser-failure fallback and stable schema fingerprints. Public client metadata and first live schema discovery still require user participation. The 434/430/410/390/366/342 counts below are historical milestones.
 
 最新桌面确认更新：完整回归434项通过（65.84秒）。新增4项GUI测试覆盖预览严格校验、错误短语、单次确认、取消、过期和主窗口关闭。弹窗尚未连接真实OAuth/策略事件，账户页明确保持submission disabled。后文430/410/390/366/342项均为历史阶段证据。
 

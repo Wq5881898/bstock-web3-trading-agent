@@ -92,10 +92,14 @@ bstock-backtest --help
 bstock-mcp-plan --help
 ```
 
-当前开发版的预期测试结果是 `434 passed`。测试失败时不要继续连接实盘通道。
+当前开发版的预期测试结果是 `442 passed`。测试失败时不要继续连接实盘通道。
 
-For the current development revision, the expected result is `434 passed`. Do not continue to a live route
+For the current development revision, the expected result is `442 passed`. Do not continue to a live route
 if tests fail.
+
+首次真实写schema发现使用`bstock-mcp-schema`，它只执行OAuth、initialize和tools/list，详情见[MCP schema验收](MCP_SCHEMA_ACCEPTANCE.md)。它不读取账户或调用订单工具；成功后仍不能直接进行实盘。
+
+Use `bstock-mcp-schema` for first live write-schema discovery. It performs only OAuth, initialize and tools/list; see [MCP schema acceptance](MCP_SCHEMA_ACCEPTANCE.md). It reads no account and calls no order tool, and success does not authorize live trading.
 
 ## 6. 第一次运行：模拟盘 / First Run: Paper Mode
 
