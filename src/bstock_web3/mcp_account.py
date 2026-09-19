@@ -15,7 +15,7 @@ from .oauth_token import SessionTokenExchange
 
 
 PROJECT_CLIENT_ID = (
-    "https://cdn.jsdelivr.net/gh/Wq5881898/bstock-web3-trading-agent@main/"
+    "https://cdn.jsdelivr.net/gh/Wq5881898/bstock-web3-trading-agent@oauth-client-v1/"
     "site/oauth/bstock-web3-agent.json"
 )
 CALLBACK_PATH = "/callback/bstock-web3-trading-agent"

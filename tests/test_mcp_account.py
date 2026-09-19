@@ -14,7 +14,7 @@ CLIENT = "https://example.com/oauth/client.json"
 
 def test_default_client_identity_is_public_self_hosted_document():
     assert PROJECT_CLIENT_ID == (
-        "https://cdn.jsdelivr.net/gh/Wq5881898/bstock-web3-trading-agent@main/"
+        "https://cdn.jsdelivr.net/gh/Wq5881898/bstock-web3-trading-agent@oauth-client-v1/"
         "site/oauth/bstock-web3-agent.json")
 
 
