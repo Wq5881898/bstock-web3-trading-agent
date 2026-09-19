@@ -4,7 +4,8 @@ from decimal import Decimal
 import pytest
 
 from bstock_web3.mcp_spot_snapshot import (LocalRiskMetrics,
-    build_mcp_spot_evidence)
+    build_local_risk_metrics, build_mcp_spot_evidence)
+from bstock_web3.spot_equity_risk import EquityRiskResult
 
 
 def fixture():
@@ -65,3 +66,26 @@ def test_third_asset_fee_fails_closed_until_risk_accounting_supports_it():
     values["trades"][0].update(commission="0.001", commissionAsset="BNB")
     with pytest.raises(ValueError, match="Third-asset commission"):
         build_mcp_spot_evidence(**values)
+
+
+def test_local_risk_metrics_come_from_equity_and_complete_fills():
+    rows = [
+        {"id":1, "symbol":"BTCUSDT", "orderId":10,
+         "time":1_788_998_400_001, "qty":"1", "quoteQty":"100",
+         "commission":"0", "commissionAsset":"BTC", "isBuyer":True},
+        {"id":2, "symbol":"BTCUSDT", "orderId":11,
+         "time":1_788_998_400_002, "qty":"1", "quoteQty":"90",
+         "commission":"0", "commissionAsset":"USDT", "isBuyer":False}]
+    equity = EquityRiskResult(Decimal("10"), Decimal("190"),
+                              Decimal("190"), Decimal("200"))
+    result = build_local_risk_metrics(trades=rows, symbol="BTCUSDT",
+        base_asset="BTC", quote_asset="USDT", risk_day="2026-09-10",
+        equity_result=equity)
+    assert result == LocalRiskMetrics(Decimal("10"), 1, 1,
+                                      1_788_998_400_001)
+
+
+def test_local_risk_metrics_reject_unverified_equity():
+    with pytest.raises(ValueError, match="Verified"):
+        build_local_risk_metrics(trades=[], symbol="BTCUSDT", base_asset="BTC",
+            quote_asset="USDT", risk_day="2026-09-10", equity_result={})

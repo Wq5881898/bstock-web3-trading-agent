@@ -34,7 +34,7 @@ Any unresolved submission blocks new preparation. Restarted `SUBMITTING` becomes
 - SELL必须精确符合数量步长，不能静默向下取整。含dust或额外非零MARKET_LOT_SIZE过滤器时，先拒绝，等待宿主实现完整账户/过滤器核对。
 - 金额使用Decimal及字符串，不转换为float。真实MCP若要求数字类型，应在后续schema/序列化适配阶段处理，当前不能直接假定兼容。
 - 当前SELL金额门槛估算使用策略参考价，不代表实时盘口/平均价格完整校验。手续费、价格偏移、free/locked资金、适用附加过滤器和实际成交记账仍必须在真实宿主接线阶段完成。
-- 执行器返回订单结果但没有把成交写到账户资金账本；部分成交的持仓、手续费及风险基准归并仍待开发。仅靠返回FILLED不能宣告资金闭环完成。
+- 执行器返回订单结果但没有自动把成交写到账户资金账本。已新增[独立成交账本](SPOT_FILL_LEDGER.md)，支持部分成交、基础/报价手续费及成本回放；真实宿主接线、权益风险基准及转账调整仍待完成。仅靠返回FILLED不能宣告资金闭环完成。
 - 日志是原子替换，不承诺断电级fsync持久性。写盘异常会阻止提交或保留SUBMITTING供查单，不自动重试。
 
 The minimal rule gate rejects unsupported/dust cases instead of silently rounding. Decimal strings are not yet proven compatible with live MCP schemas. A real host must still validate book/average-price, fee/slippage, free versus locked funds and every applicable filter, and integrate fills into the account ledger. Atomic replacement is not a power-loss/fsync durability guarantee. No live-ready or closed-loop accounting claim is made.

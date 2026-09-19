@@ -8,8 +8,12 @@
 - MCP只读白名单、分页、账户对账模块、一次性OAuth CLI和桌面读取入口。
 - 离线执行风控、执行锁、确定性订单ID与状态日志；这些不构成真实下单适配器。
 - 写盘失败回滚内存状态、拒绝日志时间倒退、读取失败不显示旧账户余额。
+- 共用的Spot成交成本算法和独立持久化账本：成交ID幂等、基础/报价手续费、部分卖出盈亏、完整历史校验、锁与写盘失败回滚；尚未接真实宿主和权益风险基准。
+- Spot权益风险账本：明确确认期初基准，按买一价估值，以完整资金流水抵消入金/出金，并从完整成交推导开仓和连亏计数；真实MCP资金流水来源及桌面编排尚未完成。
 
 Delivered: a unified tagged strategy library, editable desktop paper trading, public candles, BUY-only loss latches and manual resume, allowlisted MCP reads, reconciliation, memory-only OAuth CLI/desktop wiring, offline execution safety, persistence rollback and stale-account-view prevention.
+
+Also delivered: shared Spot fill-cost replay and a standalone persisted ledger with fee-aware realized PnL, idempotent fill IDs, complete-history validation and failure-safe locking/persistence. Live-host wiring and equity-risk baselines remain pending. See [Spot fill ledger](SPOT_FILL_LEDGER.md).
 
 ## 两条验证路径不要混淆 / Keep the two verification paths separate
 
@@ -36,6 +40,14 @@ Before live use: publish the project's client identity, complete user-driven sta
 This revision is not unattended live trading. MCP writes remain subject to the official per-action confirmation policy. An API-key alternative is disabled and requires separate discussion and approval. No account authorization or live order was performed in this closeout.
 
 ## 本轮证据 / Evidence
+
+最新权益风控更新：完整回归410项通过（64.53秒）。新增权益基准、资金流调整、跨日/重启保护，以及由完整成交推导的开仓/连亏指标。经过验证的真实资金流水来源、MCP写transport/schema、桌面确认下单与真实验收仍未完成。后文390/366/342项均为历史阶段证据。
+
+Latest equity-risk update: 410 tests passed in 64.53 seconds. UTC baselines, cash-flow adjustment, rollover/restart protection and fill-derived entry/loss metrics are now covered. A verified live cash-flow source, MCP write transport/schema, desktop confirmed submission and live acceptance remain unfinished. The 390/366/342 counts below are historical milestones.
+
+最新账本更新：完整回归390项通过（62.21秒），其中新增24项成交账本测试。真实写transport/schema、权益基准与资金划转调整、完整成交宿主接线、桌面逐笔确认下单及真实验收仍未完成。后文366/342项为历史阶段证据，不是当前计数。
+
+Latest ledger update: 390 tests passed in 62.21 seconds, including 24 new accounting cases. Live write transport/schema, equity/cash-flow risk, complete-fill host wiring, desktop confirmed submission and live acceptance remain unfinished. The 366/342 counts below are historical milestones.
 
 后续执行器更新：已新增逐笔确认执行器的离线调用契约、最小Spot过滤器和超时/重启查单测试，详见[MCP确认执行器](MCP_CONFIRMED_EXECUTOR.md)。完整回归现为366项；上方实盘前清单仍然有效，真实写transport、schema匹配、手续费/盘口、资金账本及桌面接线尚未完成。下方342项是前一阶段证据。
 

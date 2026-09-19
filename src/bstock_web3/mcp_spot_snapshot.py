@@ -11,6 +11,8 @@ import re
 
 from .execution_contract import ProductType
 from .execution_safety import McpReconciliationEvidence
+from .spot_accounting import fill_risk_stats, summarize_fills
+from .spot_equity_risk import EquityRiskResult
 
 
 MCP_SPOT_READ_TOOLS = (
@@ -38,35 +40,21 @@ class LocalRiskMetrics:
     last_entry_ms: int | None = None
 
 
+def build_local_risk_metrics(*, trades, symbol, base_asset, quote_asset,
+                             risk_day, equity_result):
+    """Join persisted equity loss with risk counters derived from full fills."""
+    if not isinstance(equity_result, EquityRiskResult):
+        raise ValueError("Verified equity risk result required")
+    stats = fill_risk_stats(trades, symbol, base_asset, quote_asset, risk_day)
+    return LocalRiskMetrics(equity_result.daily_equity_loss,
+                            stats.daily_entries, stats.consecutive_losses,
+                            stats.last_entry_ms)
+
+
 def _position_cost(trades, symbol, base_asset, quote_asset):
-    quantity = Decimal("0")
-    cost = Decimal("0")
-    for row in sorted(trades, key=lambda item: item.get("time", -1)):
-        if not isinstance(row, dict) or row.get("symbol") != symbol:
-            raise ValueError("Invalid Spot trade history")
-        qty = _decimal(row.get("qty"), "trade quantity", allow_zero=False)
-        quote = _decimal(row.get("quoteQty"), "trade quote", allow_zero=False)
-        commission = _decimal(row.get("commission", 0), "trade commission")
-        commission_asset = row.get("commissionAsset")
-        if commission and commission_asset not in {base_asset, quote_asset}:
-            raise ValueError("Third-asset commission requires explicit risk accounting")
-        if type(row.get("isBuyer")) is not bool:
-            raise ValueError("Invalid Spot trade side")
-        if row["isBuyer"]:
-            acquired = qty - (commission if commission_asset == base_asset else 0)
-            spent = quote + (commission if commission_asset == quote_asset else 0)
-            if acquired <= 0:
-                raise ValueError("Invalid net bought quantity")
-            quantity += acquired
-            cost += spent
-        else:
-            disposed = qty + (commission if commission_asset == base_asset else 0)
-            if disposed > quantity:
-                raise ValueError("Trade history cannot explain sold quantity")
-            if quantity:
-                cost -= cost * disposed / quantity
-            quantity -= disposed
-    return quantity, max(cost, Decimal("0"))
+    summary = summarize_fills(trades, symbol, base_asset, quote_asset,
+                              require_ids=False)
+    return summary.quantity, summary.cost
 
 
 def build_mcp_spot_evidence(
