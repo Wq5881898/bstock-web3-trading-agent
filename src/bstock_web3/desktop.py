@@ -73,6 +73,7 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             self.closing = False
             self._last_risk = ""
             self.alerts = []
+            self.order_prompts = []
             self.result_timer = QtCore.QTimer(self)
             self.result_timer.timeout.connect(self.collect)
             self.result_timer.start(100)
@@ -314,6 +315,12 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             self.mcp_account_summary.setTextFormat(QtCore.Qt.PlainText)
             self.mcp_account_summary.setWordWrap(True)
             account_layout.addWidget(self.mcp_account_summary)
+            self.mcp_live_status = QtWidgets.QLabel(
+                "真实Spot确认层已离线验证；OAuth会话未接入，无法提交订单。\n"
+                "Live Spot confirmation UI is offline-verified; no OAuth session, submission disabled.")
+            self.mcp_live_status.setObjectName("mcpLiveStatus")
+            self.mcp_live_status.setWordWrap(True)
+            account_layout.addWidget(self.mcp_live_status)
             self.account_summary = QtWidgets.QLabel("尚无账户快照 / No account snapshot")
             self.account_summary.setWordWrap(True)
             account_layout.addWidget(self.account_summary)
@@ -569,6 +576,19 @@ def create_monitor_class(engine_factory=None, account_reader=None):
                 self.mcp_connect.setEnabled(True)
                 self.mcp_status.setText("无法启动只读连接 / Cannot start read-only connection")
 
+        def show_confirmed_order_prompt(self, preview, on_confirmed, on_cancelled,
+                                        *, clock_ms=None):
+            """Present an injected prepared order; never creates a live session."""
+            from .desktop_order_confirmation import create_order_confirmation_dialog
+            dialog = create_order_confirmation_dialog(preview,
+                on_confirmed=on_confirmed, on_cancelled=on_cancelled,
+                clock_ms=clock_ms, parent=self)
+            self.order_prompts.append(dialog)
+            dialog.finished.connect(lambda _, item=dialog:
+                self.order_prompts.remove(item) if item in self.order_prompts else None)
+            dialog.show()
+            return dialog
+
         def collect_account(self):
             if self.account_runner is None:
                 return
@@ -642,6 +662,8 @@ def create_monitor_class(engine_factory=None, account_reader=None):
                 self.close()
 
         def closeEvent(self, event):
+            for dialog in tuple(self.order_prompts):
+                dialog.reject()
             if self.runner is not None or self.account_runner is not None:
                 self.closing = True
                 self.timer.stop()

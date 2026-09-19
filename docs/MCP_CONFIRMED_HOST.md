@@ -24,7 +24,7 @@ The separate confirmed-session boundary inherits the pinned HTTP protections and
 5. 重新读取并复核风险后调用一次`spot.newOrder`；
 6. 不确定结果只调用`spot.getOrder`。
 
-This module does not start OAuth, retain a token, expose a desktop button or call a live service. It only supplies the narrow callable required by `ConfirmedSpotExecutor`. A production host must orchestrate discovery, same-session account reconciliation, complete fill/equity/cash-flow checks, an exact per-order desktop confirmation, one submission and lookup-only recovery.
+This module does not start OAuth, retain a token, expose a live submission button or call a live service. It only supplies the narrow callable required by `ConfirmedSpotExecutor`. The [desktop confirmation dialog](DESKTOP_ORDER_CONFIRMATION.md) is now available as an offline-tested presentation boundary, but is not connected to this host. A production host must orchestrate discovery, same-session account reconciliation, complete fill/equity/cash-flow checks, an exact per-order desktop confirmation, one submission and lookup-only recovery.
 
 官方文档的自动读取在本轮返回空`202`，因此没有用抓取结果猜测schema。首次真实连接必须记录去敏后的工具名和schema兼容性结果；不记录Token、授权码、回调URL或账户余额。若运行时schema不兼容，应更新测试和适配器后重新发布，不能临时放宽验证。
 

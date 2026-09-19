@@ -11,6 +11,7 @@
 - 共用的Spot成交成本算法和独立持久化账本：成交ID幂等、基础/报价手续费、部分卖出盈亏、完整历史校验、锁与写盘失败回滚；尚未接真实宿主和权益风险基准。
 - Spot权益风险账本：明确确认期初基准，按买一价估值，以完整资金流水抵消入金/出金，并从完整成交推导开仓和连亏计数；真实MCP资金流水来源及桌面编排尚未完成。
 - 独立MCP确认会话边界：仅允许Spot读取、下单和按客户端ID查单，双层验证参数并在初始化时检查运行时schema；OAuth/桌面编排和首次真实schema验收尚未完成。
+- 桌面逐笔确认弹窗：显示账户、方向和精确金额，要求一次性短语并在15秒过期，关闭程序自动取消；真实会话和策略事件尚未连接，提交入口保持禁用。
 
 Delivered: a unified tagged strategy library, editable desktop paper trading, public candles, BUY-only loss latches and manual resume, allowlisted MCP reads, reconciliation, memory-only OAuth CLI/desktop wiring, offline execution safety, persistence rollback and stale-account-view prevention.
 
@@ -41,6 +42,10 @@ Before live use: publish the project's client identity, complete user-driven sta
 This revision is not unattended live trading. MCP writes remain subject to the official per-action confirmation policy. An API-key alternative is disabled and requires separate discussion and approval. No account authorization or live order was performed in this closeout.
 
 ## 本轮证据 / Evidence
+
+最新桌面确认更新：完整回归434项通过（65.84秒）。新增4项GUI测试覆盖预览严格校验、错误短语、单次确认、取消、过期和主窗口关闭。弹窗尚未连接真实OAuth/策略事件，账户页明确保持submission disabled。后文430/410/390/366/342项均为历史阶段证据。
+
+Latest desktop-confirmation update: 434 tests passed in 65.84 seconds. Four GUI tests cover strict preview validation, wrong phrases, one-shot confirmation, cancellation, expiry and main-window close. The dialog is not connected to live OAuth/strategy events, and the Account tab explicitly keeps submission disabled. The 430/410/390/366/342 counts below are historical milestones.
 
 最新确认会话更新：完整回归430项通过（56.56秒）。新增20项测试覆盖工具/schema发现、同会话只读、BUY/SELL精确参数、客户端订单ID、未知工具、缺失/不兼容schema和传输层绕过。OAuth/桌面编排、首次真实schema发现、资金流水来源及真实订单验收仍未完成。后文410/390/366/342项均为历史阶段证据。
 
