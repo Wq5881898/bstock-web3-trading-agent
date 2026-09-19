@@ -3,12 +3,19 @@ import json
 import pytest
 
 from bstock_web3.mcp_account import (CALLBACK_PATH, SpotAccountSummary,
-    read_spot_account_once, summarize_spot_bundle, validate_client_metadata)
+    PROJECT_CLIENT_ID, read_spot_account_once, summarize_spot_bundle,
+    validate_client_metadata)
 from bstock_web3.mcp_readonly import SpotReadBundle
 from bstock_web3.oauth_token import AccessGrant
 
 
 CLIENT = "https://example.com/oauth/client.json"
+
+
+def test_default_client_identity_is_public_self_hosted_document():
+    assert PROJECT_CLIENT_ID == (
+        "https://cdn.jsdelivr.net/gh/Wq5881898/bstock-web3-trading-agent@main/"
+        "site/oauth/bstock-web3-agent.json")
 
 
 class Response:

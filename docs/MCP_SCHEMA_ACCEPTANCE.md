@@ -29,12 +29,12 @@ If the browser does not open, use `--no-browser` and open the transient authoriz
 
 ## 失败含义 / Failure meaning
 
-- `OAuth client metadata unavailable`：公网Client Metadata仍不可访问。仓库管理员需在GitHub Settings → Pages将Source设为GitHub Actions，再重新运行Pages工作流。
+- `OAuth client metadata unavailable`：默认jsDelivr身份文件不可访问或缓存尚未刷新。先验证公开GitHub文件、刷新CDN缓存并重试；GitHub Pages仅为可选替代。
 - `Required confirmed-session MCP tools unavailable`：本账户授权范围或服务端工具集合不满足项目要求。
 - `Incompatible confirmed MCP schema`：服务端schema与当前严格适配器不兼容。必须更新代码和测试；不得临时放宽验证。
 - 超时/拒绝：重新运行命令产生新的PKCE/state；不要重用旧URL。
 
-Metadata unavailability requires enabling GitHub Pages with GitHub Actions and rerunning deployment. Missing tools indicate insufficient scope/service capability. An incompatible schema requires a reviewed code/test update—not a bypass. Timeout/denial requires a fresh command and fresh PKCE/state URL.
+Metadata unavailability means the default jsDelivr identity file is unreachable or its cache has not refreshed. Verify the public GitHub file, purge the CDN cache and retry; GitHub Pages is only an optional alternative. Missing tools indicate insufficient scope/service capability. An incompatible schema requires a reviewed code/test update—not a bypass. Timeout/denial requires a fresh command and fresh PKCE/state URL.
 
 此命令成功也不代表真实下单已验收。下一阶段仍需同一OAuth会话中的账户对账、资金流水验证、桌面逐笔确认和另行批准的最小金额订单。
 

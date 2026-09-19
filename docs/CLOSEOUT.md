@@ -24,13 +24,13 @@ Also delivered: shared Spot fill-cost replay and a standalone persisted ledger w
 
 Historical account reads and the earlier small BTC purchase used an externally authenticated MCP host. They do not validate this project's standalone desktop OAuth or order executor.
 
-GitHub推送是代码发布。公网Client Metadata是独立OAuth客户端身份的发布；两者互不等同。只做模拟盘或使用外部MCP宿主时，不需要为代码发布开启GitHub Pages。
+GitHub推送是代码发布。公网Client Metadata是独立OAuth客户端身份的发布；两者互不等同。当前默认由jsDelivr从公开仓库分发身份JSON，不再要求开启GitHub Pages。
 
-A GitHub push publishes code. Public Client Metadata publishes the standalone OAuth client identity; these are separate operations. Paper mode and an external MCP host do not require Pages merely to publish the code.
+A GitHub push publishes code. Public Client Metadata publishes the standalone OAuth client identity; these are separate operations. The default identity JSON is now distributed from the public repository by jsDelivr, so GitHub Pages is not required.
 
 ## 实盘前必须完成 / Required before live use
 
-1. 项目自己的HTTPS Client Metadata可访问，内容与本机回调匹配。可使用现有Pages部署；需要仓库管理员在Settings → Pages选择GitHub Actions。不得借用其他客户端身份。
+1. 项目自己的HTTPS Client Metadata可访问，内容与本机回调匹配。默认使用jsDelivr公开URL，首次使用前验证200/JSON及自标识一致；Pages仅为可选替代。不得借用其他客户端身份。
 2. 用户在浏览器完成独立项目OAuth，只读取账户并确认Agentic UID、余额、权限、历史订单及成交；确认没有重复创建/选错账户。
 3. 开发人工确认MCP写适配器，将策略意图、账户级风险、精度/最小金额规则、逐笔确认、执行日志、跨进程锁和查单恢复贯通。当前只读Token在读取后关闭，不能直接拿只读按钮作交易连接。
 4. 离线故障注入覆盖确认过期、拒绝、部分成交、超时、崩溃及重启。未知提交结果只查单，不自动重发。
