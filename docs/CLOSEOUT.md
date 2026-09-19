@@ -10,6 +10,7 @@
 - 写盘失败回滚内存状态、拒绝日志时间倒退、读取失败不显示旧账户余额。
 - 共用的Spot成交成本算法和独立持久化账本：成交ID幂等、基础/报价手续费、部分卖出盈亏、完整历史校验、锁与写盘失败回滚；尚未接真实宿主和权益风险基准。
 - Spot权益风险账本：明确确认期初基准，按买一价估值，以完整资金流水抵消入金/出金，并从完整成交推导开仓和连亏计数；真实MCP资金流水来源及桌面编排尚未完成。
+- 独立MCP确认会话边界：仅允许Spot读取、下单和按客户端ID查单，双层验证参数并在初始化时检查运行时schema；OAuth/桌面编排和首次真实schema验收尚未完成。
 
 Delivered: a unified tagged strategy library, editable desktop paper trading, public candles, BUY-only loss latches and manual resume, allowlisted MCP reads, reconciliation, memory-only OAuth CLI/desktop wiring, offline execution safety, persistence rollback and stale-account-view prevention.
 
@@ -40,6 +41,10 @@ Before live use: publish the project's client identity, complete user-driven sta
 This revision is not unattended live trading. MCP writes remain subject to the official per-action confirmation policy. An API-key alternative is disabled and requires separate discussion and approval. No account authorization or live order was performed in this closeout.
 
 ## 本轮证据 / Evidence
+
+最新确认会话更新：完整回归430项通过（56.56秒）。新增20项测试覆盖工具/schema发现、同会话只读、BUY/SELL精确参数、客户端订单ID、未知工具、缺失/不兼容schema和传输层绕过。OAuth/桌面编排、首次真实schema发现、资金流水来源及真实订单验收仍未完成。后文410/390/366/342项均为历史阶段证据。
+
+Latest confirmed-session update: 430 tests passed in 56.56 seconds. Twenty new tests cover discovery/schema gates, same-session reads, exact BUY/SELL arguments, client IDs, unknown tools, missing/incompatible schemas and transport-bypass attempts. OAuth/desktop orchestration, first live schema discovery, a verified cash-flow source and live-order acceptance remain unfinished. The 410/390/366/342 counts below are historical milestones.
 
 最新权益风控更新：完整回归410项通过（64.53秒）。新增权益基准、资金流调整、跨日/重启保护，以及由完整成交推导的开仓/连亏指标。经过验证的真实资金流水来源、MCP写transport/schema、桌面确认下单与真实验收仍未完成。后文390/366/342项均为历史阶段证据。
 
