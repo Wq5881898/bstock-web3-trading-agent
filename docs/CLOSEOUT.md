@@ -44,6 +44,10 @@ This revision is not unattended live trading. MCP writes remain subject to the o
 
 ## 本轮证据 / Evidence
 
+最新公网身份更新：jsDelivr Client Metadata已验证HTTP 200、`application/json`和自标识一致；GitHub Pages不再必需。完整回归443项通过（65.35秒）。首次Binance OAuth/schema发现仍需用户本人确认授权。
+
+Latest public-identity update: jsDelivr Client Metadata is verified as HTTP 200, `application/json` and exactly self-identifying; GitHub Pages is no longer required. 443 tests passed in 65.35 seconds. First Binance OAuth/schema discovery still requires the user's own authorization confirmation.
+
 最新schema验收更新：完整回归442项通过（62.09秒）。新增8项测试覆盖无工具调用的一次性OAuth编排、关闭顺序、预取消、超时参数、浏览器失败回退及稳定schema指纹。公网Client Metadata和首次真实schema发现仍待用户参与。后文434/430/410/390/366/342项均为历史阶段证据。
 
 Latest schema-acceptance update: 442 tests passed in 62.09 seconds. Eight new tests cover no-tool-call one-shot OAuth orchestration, close ordering, pre-cancellation, timeout validation, browser-failure fallback and stable schema fingerprints. Public client metadata and first live schema discovery still require user participation. The 434/430/410/390/366/342 counts below are historical milestones.
