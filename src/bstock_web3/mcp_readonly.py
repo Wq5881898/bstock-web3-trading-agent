@@ -1,11 +1,15 @@
-"""Bounded, allowlisted Binance Agent OS MCP Spot read client."""
+"""Bounded, allowlisted Spot reader for an injected supported-host exchange.
+
+This module has no network or OAuth transport.  The authenticated Codex host
+owns MCP connectivity and may inject decoded request/reply exchange behavior in
+tests or a future supported host adapter.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import json
 
 from .mcp_discovery import DiscoveryClient
-from .mcp_http import DiscoveryHTTP
 
 
 READ_ONLY_TOOLS = frozenset({
@@ -13,22 +17,6 @@ READ_ONLY_TOOLS = frozenset({
     "spot.allOrders", "spot.accountCommission", "spot.exchangeInfo",
     "spot.tickerBookTicker",
 })
-
-
-class ReadOnlyHTTP(DiscoveryHTTP):
-    """HTTP transport that adds only MCP tools/call to the base protocol."""
-    ALLOWED_METHODS = DiscoveryHTTP.ALLOWED_METHODS | {"tools/call"}
-
-    def __call__(self, message):
-        if isinstance(message, dict) and message.get("method") == "tools/call":
-            params = message.get("params")
-            if (not isinstance(params, dict) or set(params) != {"name", "arguments"}
-                    or params.get("name") not in READ_ONLY_TOOLS
-                    or not isinstance(params.get("arguments"), dict)):
-                raise ValueError("MCP tool is not on the read-only allowlist")
-            ReadOnlyMcpClient._validate_arguments(
-                params["name"], params["arguments"])
-        return super().__call__(message)
 
 
 class ReadOnlyMcpClient:

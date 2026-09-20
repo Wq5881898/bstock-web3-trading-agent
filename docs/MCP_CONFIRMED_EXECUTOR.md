@@ -2,9 +2,9 @@
 
 ## 本轮范围 / Scope
 
-`mcp_confirmed.py`提供可离线验证的执行器，注入`caller(name, arguments)`后可表达`spot.newOrder`和`spot.getOrder`调用。[确认会话边界](MCP_CONFIRMED_HOST.md)现已提供独立HTTP白名单、双层参数校验及运行时schema门禁，但没有OAuth、CLI或桌面下单接线，也未连接真实账户；原有只读客户端和只读HTTP白名单完全不变。真实工具schema兼容性仍须首次连接验证，不能称作生产下单适配器已完成。
+`mcp_confirmed.py`提供可离线验证的执行器，注入`caller(name, arguments)`后可表达`spot.newOrder`和`spot.getOrder`调用。[确认会话边界](MCP_CONFIRMED_HOST.md)提供工具白名单、双层参数校验及运行时schema门禁，但没有网络、OAuth或桌面下单接线，也未在本轮连接真实账户。网络与认证归现有Codex宿主。真实工具schema兼容性仍须由支持的宿主验证，不能称作生产下单适配器已完成。
 
-The module supplies an offline-testable executor using an injected decoded MCP tool caller. It has no HTTP, OAuth, CLI or desktop submission wiring and has not accessed a real account. Existing read-only clients/transports are unchanged. Actual write-tool schemas and numeric-argument compatibility remain unverified; this is not a completed production adapter.
+The module supplies an offline-testable executor using an injected decoded MCP tool caller. It has no HTTP, OAuth or desktop submission wiring and did not access a real account in this revision. Network and authentication belong to the existing Codex host. Actual write-tool schemas and numeric-argument compatibility still require supported-host verification; this is not a completed production adapter.
 
 ## 固定顺序 / Fixed sequence
 

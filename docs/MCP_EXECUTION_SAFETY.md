@@ -70,6 +70,6 @@ SUBMITTED/FILLED/REJECTED；超时则 UNKNOWN → 只查单
 
 Follow-up: `USER_CONFIRMED` preparation and an injected, offline-tested confirmed executor now cover confirmation/submission/lookup. This is not a live MCP write transport; read-only allowlists are unchanged and real-host/desktop submission wiring remains pending.
 
-当前仓库已有只读MCP适配器、Agentic Spot快照对账、逐笔确认执行器，以及独立的确认会话HTTP/schema边界。确认边界仍未接OAuth、桌面下单或真实账户，不能称作已完成真实下单调用。跨进程锁由安全准备入口强制要求，UNKNOWN状态只允许按客户端订单ID查单。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
+当前仓库已有无网络的只读MCP协议校验、Agentic Spot快照对账、逐笔确认执行器，以及宿主schema边界。认证和网络属于现有Codex MCP宿主；桌面仍未连接真实下单，不能称作已完成自动实盘调用。跨进程锁由安全准备入口强制要求，UNKNOWN状态只允许按客户端订单ID查单。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
 
-The repository now has read-only MCP access, Agentic Spot reconciliation, a per-order-confirmed executor, and a separate confirmed-session HTTP/schema boundary. That boundary is not wired to OAuth, desktop submission or a live account and therefore does not establish a live submission path. The execution lock remains mandatory and UNKNOWN outcomes are lookup-only by deterministic client order ID. Any API-key fallback still requires prior discussion and explicit user approval.
+The repository has network-free read protocol validation, Agentic Spot reconciliation, a per-order-confirmed executor and a host schema boundary. Authentication and network access belong to the existing Codex MCP host; desktop live submission remains unwired, so this does not establish automated live execution. The execution lock remains mandatory and UNKNOWN outcomes are lookup-only by deterministic client order ID. Any API-key fallback still requires prior discussion and explicit user approval.

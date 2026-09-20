@@ -90,16 +90,16 @@ bstock-engine --help
 bstock-history --help
 bstock-backtest --help
 bstock-mcp-plan --help
+bstock-mcp-request --help
 ```
 
-当前开发版的预期测试结果是 `443 passed`。测试失败时不要继续连接实盘通道。
+测试失败时不要继续连接实盘通道；以当前提交的CI结果为准。
 
-For the current development revision, the expected result is `443 passed`. Do not continue to a live route
-if tests fail.
+Do not continue to a live route if tests fail; use the CI result for the current commit.
 
-首次真实写schema发现使用`bstock-mcp-schema`，它只执行OAuth、initialize和tools/list，详情见[MCP schema验收](MCP_SCHEMA_ACCEPTANCE.md)。它不读取账户或调用订单工具；成功后仍不能直接进行实盘。
+项目不提供独立OAuth或schema登录命令；工具发现和认证由已授权的Codex宿主完成。详见[MCP宿主桥接](MCP_HOST_BRIDGE.md)。
 
-Use `bstock-mcp-schema` for first live write-schema discovery. It performs only OAuth, initialize and tools/list; see [MCP schema acceptance](MCP_SCHEMA_ACCEPTANCE.md). It reads no account and calls no order tool, and success does not authorize live trading.
+The project exposes no standalone OAuth or schema-login command; the authorized Codex host owns discovery and authentication. See [MCP host bridge](MCP_HOST_BRIDGE.md).
 
 ## 6. 第一次运行：模拟盘 / First Run: Paper Mode
 
@@ -162,37 +162,23 @@ manifest. Never commit `kline_history/`, `runtime/` or account data.
 
 ## 9. 可选通道 A：连接 Agent OS MCP / Optional A: Agent OS MCP
 
-### 9.1 在支持的 AI 客户端添加 MCP
+### 9.1 使用已经配置好的Codex MCP
 
-1. 在桌面浏览器登录 Binance。
-2. 打开 Binance 官方 MCP 文档，在页面中选择你使用的客户端标签。
-3. 在该客户端的 MCP 设置中添加官方端点：
+本项目使用当前Codex中已经完成授权的`binance-agent-os`连接及其现有Agentic子账户。不要在桌面程序中重新授权，不要再次创建子账户，也不要借用Codex的OAuth身份给自建客户端。若连接过期，只在Codex的MCP管理界面中重新连接。
 
-   ```text
-   https://agent.binance.com/mcp/agentic
-   ```
-
-4. 按客户端界面完成 OAuth。
-5. 按最小权限原则授权：先授予 Market Data；需要查看余额时再授予 Account；只有准备交易时才授予 Trade。
-6. 在 OAuth 流程中创建或选择专用 Agentic 子账户。
-
-不要在普通聊天窗口粘贴端点并要求 Agent 自行安装，也不要直接在浏览器打开端点；应使用客户端的
-MCP 设置流程。
-
-Do not paste the endpoint into a normal chat or open it directly in a browser. Add it
-through the AI client's MCP configuration and complete OAuth there.
+This project uses the already-authorized `binance-agent-os` connection in Codex and its existing Agentic sub-account. Do not reauthorize in the desktop, create another sub-account or reuse Codex's OAuth identity for a custom client. If the connection expires, reconnect only through Codex's MCP management UI.
 
 ### 9.2 先做只读连接测试
 
-本项目可以从命令行运行：
+先从命令行导出无凭据请求：
 
 ```powershell
-bstock-mcp-read --symbol BTCUSDT
+bstock-mcp-request --symbol BTCUSDT
 ```
 
-也可以打开桌面程序的“账户 / Account”页，输入Spot交易对后点击“连接并只读一次”。两种入口都只读取一次并立即关闭会话，没有下单按钮。项目自己的公网Client Metadata尚未可访问时，它们会在打开授权页之前停止。
+也可以打开桌面程序的“账户 / Account”页，输入Spot交易对后点击“导出Codex读取请求”。两种入口都只写本地JSON，不登录、不调用MCP、不下单。然后让当前Codex任务读取请求并通过已有连接完成只读核对。
 
-Run `bstock-mcp-read --symbol BTCUSDT`, or use “Connect & read once” on the desktop Account tab. Both paths collect one read-only snapshot and immediately close the session; neither exposes an order button. They stop before authorization while the project's public Client Metadata is unavailable.
+Run `bstock-mcp-request --symbol BTCUSDT`, or use “Export Codex read request” on the desktop Account tab. Both paths only write local JSON: no login, MCP call or order. Ask the current Codex task to consume the request through its existing connection.
 
 在已连接 MCP 的 Agent 中输入：
 
@@ -378,7 +364,7 @@ python -m pip install -e ".[desktop]"
 
 重新连接 MCP，检查 Account/Trade scopes、账户地区资格以及 Agentic 子账户正确钱包中的余额。
 
-### MCP OAuth 过期
+### Codex MCP授权过期
 
 在 AI 客户端中断开 Binance MCP，然后重新添加/连接并完成 OAuth。
 

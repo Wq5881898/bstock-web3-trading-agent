@@ -1,7 +1,7 @@
-"""Schema-gated MCP client for explicitly confirmed Spot orders.
+"""Schema-gated Spot client for an injected supported MCP host.
 
-This module deliberately does not perform OAuth, retain tokens, or decide when
-to trade. It is a narrow transport/client boundary for ConfirmedSpotExecutor.
+This module deliberately has no HTTP/OAuth transport, retains no tokens and
+does not decide when to trade. Codex owns the authenticated Binance MCP session.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import json
 import re
 
 from .mcp_discovery import DiscoveryClient
-from .mcp_http import DiscoveryHTTP
 from .mcp_readonly import READ_ONLY_TOOLS, ReadOnlyMcpClient
 
 
@@ -101,25 +100,6 @@ def validate_confirmed_schema(name, schema):
         raise ValueError("Incompatible confirmed MCP required fields")
     if any(not _allows_string(properties[key]) for key in expected):
         raise ValueError("Confirmed MCP string schema required")
-
-
-class ConfirmedHTTP(DiscoveryHTTP):
-    """Same pinned HTTP implementation, with an exact session tool allowlist."""
-    ALLOWED_METHODS = DiscoveryHTTP.ALLOWED_METHODS | {"tools/call"}
-
-    def __call__(self, message):
-        if isinstance(message, dict) and message.get("method") == "tools/call":
-            params = message.get("params")
-            if (not isinstance(params, dict) or set(params) != {"name", "arguments"}
-                    or params.get("name") not in CONFIRMED_SESSION_TOOLS
-                    or not isinstance(params.get("arguments"), dict)):
-                raise ValueError("MCP tool is not on the confirmed-session allowlist")
-            if params["name"] in READ_ONLY_TOOLS:
-                ReadOnlyMcpClient._validate_arguments(
-                    params["name"], params["arguments"])
-            else:
-                validate_confirmed_arguments(params["name"], params["arguments"])
-        return super().__call__(message)
 
 
 class ConfirmedMcpClient:

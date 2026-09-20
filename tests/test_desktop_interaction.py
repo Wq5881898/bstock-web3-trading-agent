@@ -8,7 +8,6 @@ import pytest
 pytest.importorskip("PyQt5")
 from PyQt5 import QtWidgets
 from bstock_web3.desktop import create_monitor_class
-from bstock_web3.mcp_account import SpotAccountSummary
 from bstock_web3.strategy import SignalDecision
 pytestmark = pytest.mark.usefixtures("qt_app")
 
@@ -306,99 +305,68 @@ def test_risk_alert_is_nonmodal_and_deduplicated(monkeypatch, tmp_path):
         window.close()
 
 
-def mcp_summary():
-    return SpotAccountSummary(1274302954, "SPOT", True,
-        ({"asset":"USDT", "free":"190.42", "locked":"0"},),
-        0, 1, 1, "BTCUSDT", "79800", "79801")
-
-
-def test_mcp_account_tab_reads_in_background_and_closes_session(monkeypatch, tmp_path):
+def test_mcp_account_tab_exports_request_for_existing_codex_host(monkeypatch, tmp_path):
     monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
-    entered, release = Event(), Event()
-    def reader(symbol, *, announce_url, cancelled):
-        assert symbol == "BTCUSDT" and not cancelled()
-        announce_url("https://accounts.example/authorize?state=test")
-        entered.set(); assert release.wait(2)
-        return mcp_summary()
-    window = create_monitor_class(lambda config: None, reader)()
-    app = QtWidgets.QApplication.instance()
+    calls = []
+    def writer(symbol):
+        calls.append(symbol)
+        path = tmp_path / "mcp" / "read.json"
+        path.parent.mkdir()
+        path.write_text('{"operation":"READ_SPOT_SNAPSHOT"}')
+        return path, SimpleNamespace(symbol=symbol)
+    window = create_monitor_class(lambda config: None, writer)()
     try:
         window.mcp_symbol.setText("btcusdt")
         window.mcp_connect.click()
-        assert entered.wait(1)
-        assert not window.mcp_symbol.isEnabled()
-        assert not window.mcp_connect.isEnabled()
-        pump(app, lambda: "state=test" in window.mcp_auth_url.text())
-        release.set()
-        pump(app, lambda: window.account_runner is None)
-        assert "UID=1274302954" in window.mcp_account_summary.text()
-        assert "USDT: free=190.42" in window.mcp_account_summary.text()
-        assert "session closed" in window.mcp_status.text()
-        assert window.mcp_auth_url.text() == ""
+        assert calls == ["BTCUSDT"]
+        assert "read.json" in window.mcp_status.text()
+        assert "no OAuth or MCP call" in window.mcp_status.text()
+        assert "No Codex MCP snapshot imported" in window.mcp_account_summary.text()
         assert window.mcp_connect.isEnabled()
-        assert all("下单" not in button.text() for button in
-                   window.findChildren(QtWidgets.QPushButton))
-    finally:
-        release.set(); window.close()
-
-
-def test_mcp_account_failure_can_retry(monkeypatch, tmp_path):
-    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
-    attempts=[]
-    def reader(symbol, **kwargs):
-        attempts.append(symbol)
-        if len(attempts) == 1:
-            raise ValueError("OAuth client metadata unavailable")
-        return mcp_summary()
-    window = create_monitor_class(lambda config: None, reader)()
-    app = QtWidgets.QApplication.instance()
-    try:
-        window.mcp_connect.click()
-        pump(app, lambda: window.account_runner is None)
-        assert "metadata unavailable" in window.mcp_status.text()
-        assert window.mcp_connect.isEnabled()
-        window.mcp_connect.click()
-        pump(app, lambda: window.account_runner is None)
-        assert len(attempts) == 2
-        assert "Read complete" in window.mcp_status.text()
     finally:
         window.close()
 
 
-def test_window_close_cancels_pending_mcp_login(monkeypatch, tmp_path):
-    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
-    entered = Event()
-    def reader(symbol, *, announce_url, cancelled):
-        entered.set()
-        while not cancelled():
-            time.sleep(.005)
-        raise ValueError("MCP account read cancelled")
-    window = create_monitor_class(lambda config: None, reader)()
-    app = QtWidgets.QApplication.instance()
-    window.show()
-    window.mcp_connect.click(); assert entered.wait(1)
-    window.close()
-    assert window.isVisible()
-    pump(app, lambda: window.account_runner is None and not window.isVisible())
-
-
-def test_mcp_retry_failure_does_not_display_old_balance(monkeypatch, tmp_path):
+def test_mcp_request_export_failure_can_retry(monkeypatch, tmp_path):
     monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
     attempts=[]
-    def reader(symbol, **kwargs):
+    def writer(symbol):
         attempts.append(symbol)
         if len(attempts) == 1:
-            return mcp_summary()
-        raise ValueError("MCP authorization unavailable")
-    window = create_monitor_class(lambda config: None, reader)()
-    app = QtWidgets.QApplication.instance()
+            raise ValueError("disk unavailable")
+        return tmp_path / "request.json", SimpleNamespace(symbol=symbol)
+    window = create_monitor_class(lambda config: None, writer)()
     try:
         window.mcp_connect.click()
-        pump(app, lambda: window.account_runner is None)
-        assert "190.42" in window.mcp_account_summary.text()
+        assert "disk unavailable" in window.mcp_status.text()
+        assert window.mcp_connect.isEnabled()
+        window.mcp_connect.click()
+        assert len(attempts) == 2
+        assert "request.json" in window.mcp_status.text()
+    finally:
+        window.close()
+
+
+def test_window_close_has_no_pending_mcp_login(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    def writer(symbol):
+        return tmp_path / "request.json", SimpleNamespace(symbol=symbol)
+    window = create_monitor_class(lambda config: None, writer)()
+    window.show()
+    window.mcp_connect.click()
+    window.close()
+    assert not window.isVisible()
+
+
+def test_mcp_export_clears_untrusted_old_balance(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    def writer(symbol):
+        return tmp_path / "request.json", SimpleNamespace(symbol=symbol)
+    window = create_monitor_class(lambda config: None, writer)()
+    try:
+        window.mcp_account_summary.setText("OLD BALANCE 190.42")
         window.mcp_connect.click()
         assert "190.42" not in window.mcp_account_summary.text()
-        pump(app, lambda: window.account_runner is None)
-        assert "No valid snapshot" in window.mcp_account_summary.text()
+        assert "No Codex MCP snapshot imported" in window.mcp_account_summary.text()
     finally:
         window.close()

@@ -24,14 +24,14 @@ The user must type the exact one-time phrase. Confirmation emits once; cancel, c
 
 账户页明确显示“submission disabled”。当前确认弹窗只能由经过测试的注入方法调用，没有按钮从模拟/报价监控直接生成真实订单，也没有在GUI线程中执行网络调用。完整接线仍需：
 
-1. 项目OAuth Client Metadata公网可用；
-2. 同一短期OAuth会话通过真实`tools/list` schema门禁；
+1. 现有Codex宿主的Binance MCP授权仍然有效；
+2. 支持的宿主通过真实`tools/list` schema门禁；
 3. 完整账户/成交/订单/盘口/规则/资金流水对账；
 4. 策略信号转换为统一`OrderIntent`并通过风险策略；
 5. 后台线程预览，GUI确认，后台线程复核并提交；
 6. 成交后重新读取并更新账本，UNKNOWN仅查单。
 
-The Account tab explicitly says submission is disabled. No button converts a paper/quote monitor event into a live order, and no network operation runs on the GUI thread. Full wiring still requires public client metadata, first live schema acceptance in the same short-lived OAuth session, complete account reconciliation, signal-to-intent risk checks, background preview/submit, and post-fill reconciliation with lookup-only UNKNOWN recovery.
+The Account tab explicitly says submission is disabled and only exports a credential-free Codex-host request. No button converts a paper/quote event into a live order, and no OAuth/network operation runs in this desktop process. Full wiring still requires supported-host schema acceptance, complete account reconciliation, signal-to-intent risk checks, host confirmation/submit, and post-fill reconciliation with lookup-only UNKNOWN recovery.
 
 本模块不会保存确认短语、Token、账户资料或订单预览，也不会在日志输出这些内容。
 

@@ -10,7 +10,7 @@
 项目将 Binance bStock 市场数据转换为本地 1 分钟/5 分钟 EMA 交易信号，支持确定性历史回放、
 模拟盘监控，并可把经过用户确认的订单路由到两条彼此独立的执行通道：
 
-- **Binance Agent OS MCP**：通过 OAuth 选择的 Agentic 子账户执行 Binance Spot 订单。
+- **Binance Agent OS MCP**：通过现有、已授权的Codex MCP宿主访问其所选Agentic子账户。
 - **Binance Agentic Wallet (`baw`)**：在 BSC 上执行 bStock 报价和链上交易。
 
 本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认模式为模拟盘，
@@ -28,8 +28,8 @@
   Deterministic replay, paper trading and a standalone PyQt desktop monitor.
 - 本地 `paper`、Agentic Wallet `quote` 和 `live-confirmed` 模式。<br>
   Local `paper` plus Agentic Wallet `quote` and `live-confirmed` modes.
-- 为 OAuth Agentic 子账户生成不含凭据的 Agent OS MCP Spot 订单计划。<br>
-  Credential-free Agent OS MCP Spot plans for an OAuth-selected Agentic sub-account.
+- 为现有Codex MCP宿主生成不含凭据的Spot读取请求和订单计划。<br>
+  Credential-free Spot read requests and order plans for the existing Codex MCP host.
 - 通过官方 `baw --json` 接入 Binance Agentic Wallet。<br>
   Binance Agentic Wallet integration through the official `baw --json` interface.
 - 对资格名单、余额、往返成本、Quote 时效、重复确认、未决订单、状态损坏和未完成 K 线实行失败关闭。<br>
@@ -61,13 +61,13 @@ it is **not an unattended live-trading release**.
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
-| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、最小Spot规则、部分成交及超时/重启只查单 / Exact confirmation, 15-second expiry, pre-submit checks, minimal Spot rules, partial fills and lookup-only recovery | 注入假MCP调用验收；未接OAuth、桌面下单或真实调用 / Tested with injected fake MCP calls; no OAuth, desktop submission or live call |
-| MCP确认会话边界 / Confirmed MCP session boundary | 独立写白名单、双层参数校验、运行时schema门禁和同会话读取 / Separate write allowlist, two-layer argument checks, runtime schema gate and same-session reads | [离线验收](docs/MCP_CONFIRMED_HOST.md)；尚未接OAuth/桌面或真实调用 / Offline accepted; no OAuth/desktop/live call |
+| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、最小Spot规则、部分成交及超时/重启只查单 / Exact confirmation, 15-second expiry, pre-submit checks, minimal Spot rules, partial fills and lookup-only recovery | 注入假宿主调用验收；未接桌面真实提交 / Tested with an injected host caller; no desktop live submission |
+| MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | [离线验收](docs/MCP_CONFIRMED_HOST.md)；网络和认证归Codex宿主 / Offline accepted; Codex owns network and auth |
 | 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
-| MCP schema验收 / MCP schema acceptance | 一次性OAuth后仅初始化和tools/list，输出写schema指纹并关闭会话 / One-shot OAuth, initialize/tools-list only, write-schema fingerprint, then close | [CLI已离线验收](docs/MCP_SCHEMA_ACCEPTANCE.md)；不读账户、不调用订单 / CLI offline accepted; no account read or order call |
+| Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、订单计划、宿主确认边界、结果严格对账 / Credential-free reads/plans, host confirmation and strict result reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
 | Spot成交账本 / Spot fill ledger | 成交ID幂等、基础/报价手续费、移动平均成本、已实现盈亏、锁与原子检查点 / Idempotent fills, base/quote fees, average cost, realized PnL and locked atomic checkpoints | [离线模块](docs/SPOT_FILL_LEDGER.md)；真实宿主接线未完成 / Offline module; live-host wiring pending |
 | Spot权益风险 / Spot equity risk | UTC基准、买一价估值、资金流调整，以及成交推导的开仓/连亏计数 / UTC baselines, best-bid valuation, cash-flow adjustment and fill-derived entry/loss counters | [离线模块](docs/SPOT_EQUITY_RISK.md)；完整资金流水源和桌面编排未完成 / Offline module; complete cash-flow source and desktop orchestration pending |
-| 独立MCP只读宿主 / Standalone read-only MCP host | PKCE/state、本机回调、仅内存Token交换、固定端点HTTP/SSE、双层只读白名单、有界分页、一次性CLI及桌面账户页 / PKCE/state, loopback callback, session-only token exchange, pinned HTTP/SSE, defense-in-depth allowlist, bounded pagination, one-shot CLI and desktop Account tab | 本地接线可用；公网Client Metadata和首次真实登录验收未完成 / Local wiring available; public metadata and first live-login acceptance pending |
+| MCP只读请求 / MCP read request | 桌面/CLI导出限时无凭据请求；由已授权Codex宿主执行 / Desktop/CLI exports a short-lived credential-free request executed by the authorized Codex host | 可用；本地不启动OAuth或网络连接 / Available; no local OAuth or network session |
 
 ### 默认模拟风控 / Default Paper Controls
 
@@ -91,8 +91,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**443项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **443 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**393项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **393 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -105,27 +105,26 @@ market snapshot and do not trigger additional wallet calls or orders.
   Range EMA/Median read public NVDAB trades successfully; 1,000 warmup trades formed two 20-bps bars, so the strategies correctly remained unready with zero fills.
 - Agent OS MCP已完成一次BTCUSDT真实只读账户/余额/订单/成交/手续费/规则/盘口核对；未调用写工具。<br>
   Agent OS MCP completed one real read-only BTCUSDT account, balance, order, fill, commission, rule and book reconciliation; no write tool was called.
-- **尚未完成**：持续真实行情与成交验收、完整历史成交UI、
-  公网OAuth Client Metadata、独立程序首次真实登录、MCP人工确认下单适配器及持续实盘验收。<br>
+- **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Codex宿主结果自动回传、
+  策略到MCP人工确认订单的持续实盘验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
-  public OAuth client metadata, the standalone app's first live login,
-  a user-confirmed MCP order adapter and sustained live acceptance.
+  automatic Codex-host result return, and sustained strategy-to-confirmed-order acceptance.
 
-独立只读连接命令（不会下单）：
-
-```powershell
-bstock-mcp-read --symbol BTCUSDT
-```
-
-它会先验证项目自己的公网OAuth Client Metadata，再打开Binance授权页；Token仅保存在本次进程内，读取一次账户摘要后立即关闭MCP会话。Client Metadata尚未公开可访问时会在打开授权页之前失败关闭。
-
-Standalone read-only connection (never places an order):
+导出只读请求（不会登录、连接或下单）：
 
 ```powershell
-bstock-mcp-read --symbol BTCUSDT
+bstock-mcp-request --symbol BTCUSDT
 ```
 
-The command validates the project's public OAuth Client Metadata before opening Binance authorization. The token remains in this process only, and the MCP session closes immediately after one account summary. It fails closed before authorization while the metadata document is not publicly reachable.
+该命令只生成`runtime/mcp/latest-read-request.json`。请让当前已经授权的Codex任务读取并通过现有`binance-agent-os`连接执行。项目不会再次创建Agentic账户，也不会发起OAuth。
+
+Export a read-only request (no login, connection or order):
+
+```powershell
+bstock-mcp-request --symbol BTCUSDT
+```
+
+The command only writes `runtime/mcp/latest-read-request.json`. Give it to the already-authorized Codex task, which uses its existing `binance-agent-os` connection. The project neither recreates the Agentic account nor starts OAuth.
 
 技术说明 / Technical notes:
 [MCP确认执行器（离线）/ Confirmed MCP executor (offline)](docs/MCP_CONFIRMED_EXECUTOR.md) ·
@@ -139,7 +138,7 @@ The command validates the project's public OAuth Client Metadata before opening 
 [自动交易风控 / Automation policy](docs/AUTOMATION_POLICY.md) ·
 [MCP执行安全 / MCP execution safety](docs/MCP_EXECUTION_SAFETY.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
-[MCP OAuth / MCP OAuth](docs/MCP_OAUTH.md) ·
+[Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
 [回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 
@@ -160,15 +159,16 @@ Binance Spot K 线 ─────────► 秒级历史 ─► 1m / 5m K 
                               Agentic 子账户 Spot      Agentic Wallet (BSC)
 ```
 
-MCP 桥接层会把 OAuth 和账户凭据留在 Agent OS 宿主中。本地程序只生成短时有效、需要一次性确认的
-`spot.newOrder` 计划；宿主必须在下单前重新检查账户、交易对、手续费、余额和最终订单内容。
+MCP 桥接层把 OAuth 和账户凭据留在已经授权的Codex宿主中。本地程序只生成短时有效的读取请求或
+`spot.newOrder` 计划；支持的宿主必须在下单前重新检查账户、交易对、手续费、余额和最终订单内容，并负责确认。
 
 Agentic Wallet 是独立的链上执行通道，具有自己的余额、Quote、滑点、Gas 和确认检查。两条通道不共享
 凭据；任何一条通道失败时，都不会静默切换到另一条通道。
 
-The MCP bridge keeps OAuth and account credentials inside the Agent OS host. Local code
-only emits a short-lived, one-time-confirmed `spot.newOrder` plan. Before dispatch, the
-host must revalidate the account, symbol, commission, balance and final order. Agentic
+The MCP bridge keeps OAuth and account credentials inside the already-authorized Codex
+host. Local code only emits a short-lived read request or `spot.newOrder` plan. Before
+dispatch, the supported host must revalidate the account, symbol, commission, balance,
+final order and user confirmation. Agentic
 Wallet remains a separate on-chain route with its own balance, quote, slippage, gas and
 confirmation checks. The transports never share credentials or silently fall back to one
 another.
@@ -197,9 +197,10 @@ bstock-desktop
 ```
 
 窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”和“账户 / Account”。可选择MTF EMA、逐笔Median或固定/防御/Auto/Adaptive Range，检查金额与风控后启动。各逐笔策略使用独立模拟资金；GUI没有真实下单开关。<br>
-The window has Monitor, Candles and Strategies tabs. Select default/custom MTF EMA,
+The window has Monitor, Candles, Strategies and Account tabs. Select default/custom MTF EMA,
 tick Median, or fixed/guarded/Auto/Adaptive Range, review budget/risk inputs, then start.
-Each tick strategy uses separate simulated funds; the GUI has no live-order switch.
+Each tick strategy uses separate simulated funds; the Account tab exports a Codex MCP
+read request and the GUI has no live-order switch or OAuth login.
 
 本地合成桌面验收（不连接账户，结果保存在被Git忽略的`runtime/`目录）：<br>
 Local synthetic desktop acceptance (no account connection; output stays in git-ignored `runtime/`):
@@ -288,7 +289,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `443 passed`
+- 本地自动化测试 / Local automated tests: `393 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance
@@ -320,7 +321,7 @@ bStock Web3 Trading Agent is a standalone, safety-first quantitative trading pro
 for Binance bStocks, built for the **Binance Agent OS Mini Hackathon — Track A**. It
 combines public bStock data, local 1m/5m strategy signals, deterministic replay, paper
 monitoring and two strictly separated execution bridges: Agent OS MCP Spot through an
-OAuth-selected Agentic sub-account, and Agentic Wallet bStock swaps on BSC.
+an existing Codex-host-selected Agentic sub-account, and Agentic Wallet bStock swaps on BSC.
 
 Paper mode is the default. No MCP call, wallet signature or real transaction is performed
 without an actionable signal, fresh validation and explicit per-order confirmation.

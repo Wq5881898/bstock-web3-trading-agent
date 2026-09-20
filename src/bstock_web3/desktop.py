@@ -49,26 +49,37 @@ def desktop_state_file(symbol: str, mode: str) -> Path:
     return runtime_root / f"{safe_symbol}_{mode}.json"
 
 
-def create_monitor_class(engine_factory=None, account_reader=None):
+def mcp_request_file(symbol: str) -> Path:
+    normalized = symbol.strip().lower()
+    if not re.fullmatch(r"[a-z0-9]{1,32}", normalized):
+        raise ValueError("Invalid MCP Spot symbol")
+    return desktop_state_file(normalized, "paper").parent / "mcp" / \
+        f"{normalized}-read-request.json"
+
+
+def create_monitor_class(engine_factory=None, bridge_writer=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
-    from .mcp_account_runner import McpAccountRunner
     from .median_monitor import MedianMonitor
     if engine_factory is None:
         from .strategy_registry import strategy_spec
         engine_factory = lambda config: (MedianMonitor(config)
             if strategy_spec(config.strategy_kind).input_kind == "aggregate-trades" else BStockEngine(config))
-    if account_reader is None:
-        from .mcp_account import read_spot_account_once
-        account_reader = read_spot_account_once
+    if bridge_writer is None:
+        from .mcp_bridge import (build_mcp_spot_read_request,
+                                 write_mcp_read_request)
+        def bridge_writer(symbol):
+            request = build_mcp_spot_read_request(symbol)
+            path = mcp_request_file(symbol)
+            write_mcp_read_request(request, path)
+            return path, request
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
             super().__init__()
             self.engine = None
             self.runner = None
-            self.account_runner = None
             self.state_lock = None
             self.closing = False
             self._last_risk = ""
@@ -294,30 +305,26 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             self.mcp_symbol = QtWidgets.QLineEdit("BTCUSDT")
             self.mcp_symbol.setMaximumWidth(140)
             self.mcp_connect = QtWidgets.QPushButton(
-                "连接并只读一次 / Connect && read once")
-            self.mcp_connect.clicked.connect(self.start_mcp_read)
+                "导出Codex读取请求 / Export Codex read request")
+            self.mcp_connect.clicked.connect(self.export_mcp_read_request)
             mcp_row.addWidget(QtWidgets.QLabel("MCP Spot标的 / Symbol"))
             mcp_row.addWidget(self.mcp_symbol)
             mcp_row.addWidget(self.mcp_connect)
             mcp_row.addStretch(1)
             account_layout.addLayout(mcp_row)
             self.mcp_status = QtWidgets.QLabel(
-                "未连接；只读功能不会下单 / Disconnected; read-only, no orders")
+                "MCP连接由已授权的Codex宿主管理；本程序不发起OAuth。\n"
+                "The authorized Codex host owns MCP; this app never starts OAuth.")
             self.mcp_status.setWordWrap(True)
             account_layout.addWidget(self.mcp_status)
-            self.mcp_auth_url = QtWidgets.QLineEdit()
-            self.mcp_auth_url.setReadOnly(True)
-            self.mcp_auth_url.setPlaceholderText(
-                "授权地址仅在本次登录期间显示 / Authorization URL appears during login")
-            account_layout.addWidget(self.mcp_auth_url)
             self.mcp_account_summary = QtWidgets.QLabel(
-                "尚无MCP账户快照 / No MCP account snapshot")
+                "尚未导入Codex返回的MCP账户快照 / No Codex MCP snapshot imported")
             self.mcp_account_summary.setTextFormat(QtCore.Qt.PlainText)
             self.mcp_account_summary.setWordWrap(True)
             account_layout.addWidget(self.mcp_account_summary)
             self.mcp_live_status = QtWidgets.QLabel(
-                "真实Spot确认层已离线验证；OAuth会话未接入，无法提交订单。\n"
-                "Live Spot confirmation UI is offline-verified; no OAuth session, submission disabled.")
+                "现有Agentic账户不会在这里重新创建或重新授权；真实提交入口保持禁用。\n"
+                "This page never recreates or reauthorizes the existing Agentic account; live submission disabled.")
             self.mcp_live_status.setObjectName("mcpLiveStatus")
             self.mcp_live_status.setWordWrap(True)
             account_layout.addWidget(self.mcp_live_status)
@@ -552,29 +559,27 @@ def create_monitor_class(engine_factory=None, account_reader=None):
                 self.risk_label.setText("指令排队，下一轮评估处理 / Queued for next evaluation")
                 self.poll()
 
-        def start_mcp_read(self):
-            if self.account_runner is not None:
-                return
+        def export_mcp_read_request(self):
             symbol = self.mcp_symbol.text().strip().upper()
             if not re.fullmatch(r"[A-Z0-9]{1,32}", symbol):
                 self.mcp_status.setText(
                     "标的格式错误 / Invalid Spot symbol")
                 return
             self.mcp_symbol.setText(symbol)
-            self.mcp_symbol.setEnabled(False)
-            self.mcp_connect.setEnabled(False)
-            self.mcp_auth_url.clear()
             self.mcp_account_summary.setText(
-                "等待新快照；旧快照已清除 / Waiting for fresh snapshot; previous snapshot cleared")
-            self.mcp_status.setText(
-                "正在校验客户端身份并等待Binance授权 / Validating client and waiting for Binance authorization")
-            self.account_runner = McpAccountRunner(account_reader)
-            if not self.account_runner.start(symbol):
-                self.account_runner.close()
-                self.account_runner = None
-                self.mcp_symbol.setEnabled(True)
-                self.mcp_connect.setEnabled(True)
-                self.mcp_status.setText("无法启动只读连接 / Cannot start read-only connection")
+                "尚未导入Codex返回的MCP账户快照 / No Codex MCP snapshot imported")
+            try:
+                path, request = bridge_writer(symbol)
+                if request.symbol != symbol:
+                    raise ValueError("MCP bridge symbol mismatch")
+                self.mcp_status.setText(
+                    f"读取请求已导出：{path}\n"
+                    "请由当前已授权的Codex任务读取并执行；未启动OAuth，也未调用MCP。\n"
+                    f"Request exported: {path}\n"
+                    "Hand it to the authorized Codex task; no OAuth or MCP call was started here.")
+            except Exception as exc:
+                self.mcp_status.setText(
+                    f"导出读取请求失败 / Read-request export failed: {exc}")
 
         def show_confirmed_order_prompt(self, preview, on_confirmed, on_cancelled,
                                         *, clock_ms=None):
@@ -589,53 +594,9 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             dialog.show()
             return dialog
 
-        def collect_account(self):
-            if self.account_runner is None:
-                return
-            url = self.account_runner.take_url()
-            if url is not None:
-                self.mcp_auth_url.setText(url)
-                self.mcp_status.setText(
-                    "授权页已打开；如未打开请复制上方地址 / Authorization opened; copy the URL above if needed")
-            future = self.account_runner.take()
-            if future is None:
-                return
-            try:
-                summary = future.result()
-                balances = " · ".join(
-                    f'{row["asset"]}: free={row["free"]}, locked={row["locked"]}'
-                    for row in summary.balances) or "none"
-                self.mcp_account_summary.setText(
-                    f"Agentic Spot UID={summary.uid} · canTrade={summary.can_trade} · "
-                    f"{summary.symbol} bid={summary.bid_price}, ask={summary.ask_price}\n"
-                    f"Balances: {balances}\n"
-                    f"openOrders={summary.open_order_count} · trades={summary.trade_count} · orders={summary.order_count}")
-                self.mcp_status.setText(
-                    "只读快照完成，Token和MCP会话已关闭 / Read complete; token and MCP session closed")
-            except Exception as exc:
-                if not self.closing:
-                    self.mcp_account_summary.setText(
-                        "本次无有效快照 / No valid snapshot from this attempt")
-                    self.mcp_status.setText(
-                        f"只读连接失败 / Read-only connection failed: {exc}")
-            finally:
-                self.mcp_auth_url.clear()
-                self.account_runner.close()
-                self.account_runner = None
-                if not self.closing:
-                    self.mcp_symbol.setEnabled(True)
-                    self.mcp_connect.setEnabled(True)
-                else:
-                    self.finish_stop()
-
         def finish_stop(self):
             if self.runner is not None and self.runner.future is not None:
                 return
-            if self.account_runner is not None:
-                if self.account_runner.future is not None:
-                    return
-                self.account_runner.close()
-                self.account_runner = None
             if self.runner is not None:
                 self.runner.close()
                 if not self.runner.close_future.done():
@@ -664,13 +625,10 @@ def create_monitor_class(engine_factory=None, account_reader=None):
         def closeEvent(self, event):
             for dialog in tuple(self.order_prompts):
                 dialog.reject()
-            if self.runner is not None or self.account_runner is not None:
+            if self.runner is not None:
                 self.closing = True
                 self.timer.stop()
                 self.start.setEnabled(False)
-                self.mcp_connect.setEnabled(False)
-                if self.account_runner is not None:
-                    self.account_runner.cancel()
                 self.status.setText("等待当前评估安全结束 / Waiting for evaluation to finish")
                 event.ignore()
                 self.finish_stop()
@@ -679,7 +637,6 @@ def create_monitor_class(engine_factory=None, account_reader=None):
             event.accept()
 
         def collect(self):
-            self.collect_account()
             if self.runner is None:
                 if self.closing:
                     self.finish_stop()

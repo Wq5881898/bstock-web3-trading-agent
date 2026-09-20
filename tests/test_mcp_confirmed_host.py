@@ -3,7 +3,7 @@ import json
 import pytest
 
 from bstock_web3.mcp_confirmed_host import (CONFIRMED_SESSION_TOOLS,
-    ConfirmedHTTP, ConfirmedMcpClient, validate_confirmed_arguments,
+    ConfirmedMcpClient, validate_confirmed_arguments,
     validate_confirmed_schema)
 from bstock_web3.mcp_discovery import DiscoveryClient
 
@@ -134,37 +134,3 @@ def test_schema_rejects_extra_required_or_missing_contract_field():
     value["properties"].pop("quantity")
     with pytest.raises(ValueError, match="schema"):
         validate_confirmed_schema("spot.newOrder", value)
-
-
-class Result:
-    def __init__(self, message):
-        self.status_code = 200
-        self.headers = {"Content-Type":"application/json"}
-        self.message = message
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-    def iter_content(self, **kwargs):
-        yield json.dumps({"jsonrpc":"2.0", "id":self.message["id"],
-                          "result":{}}).encode()
-
-
-class Session:
-    def __init__(self): self.calls = []; self.trust_env = True
-    def close(self): pass
-    def post(self, url, **kwargs):
-        self.calls.append(kwargs["json"])
-        return Result(kwargs["json"])
-
-
-def test_transport_defense_blocks_unlisted_and_malformed_writes():
-    session = Session(); transport = ConfirmedHTTP("test-token", session=session)
-    transport._initialized = True
-    message = {"jsonrpc":"2.0", "id":1, "method":"tools/call",
-               "params":{"name":"spot.newOrder", "arguments":buy()}}
-    assert transport(message)["result"] == {}
-    sent = len(session.calls)
-    for name, args in (("wallet.withdraw", {}), ("spot.newOrder", {"symbol":"BTCUSDT"})):
-        with pytest.raises(ValueError):
-            transport({"jsonrpc":"2.0", "id":2, "method":"tools/call",
-                       "params":{"name":name, "arguments":args}})
-    assert len(session.calls) == sent

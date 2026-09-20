@@ -85,7 +85,7 @@ def main() -> int:
         "planFile": str(args.output.resolve()),
         "plan": plan.to_dict(),
         "message": (
-            "计划不会自行下单。请交给已登录 Binance Agent OS MCP 的宿主，"
+            "计划不会自行下单。请交给当前已授权的Codex Binance Agent OS MCP宿主，"
             "完成账户、规则、手续费和最终订单核验后再逐笔确认。"
         ),
     }, ensure_ascii=False, indent=2))
@@ -94,4 +94,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -46,7 +46,7 @@ and writes SHA-256 hashes in its manifest.
 bstock-mcp-plan --symbol NVDAB --amount 20
 ```
 
-The plan targets `NVDABUSDT` Spot in the OAuth-selected Agentic sub-account. It contains
+The plan targets `NVDABUSDT` Spot in the existing Codex-host-selected Agentic sub-account. It contains
 no credentials and cannot execute itself. Show the host-side read-only account, market,
 commission and balance checks, then the one-time confirmation gate. See
 [AGENT_OS_MCP.md](AGENT_OS_MCP.md).

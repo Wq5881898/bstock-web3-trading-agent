@@ -4,7 +4,7 @@
 
 已通过当前Codex宿主连接的Binance Agent OS MCP，对OAuth选择的Agentic子账户完成一次`BTCUSDT`只读核对。为避免公开仓库泄露账户信息，本文不记录UID、精确余额、订单ID或成交ID。
 
-One read-only `BTCUSDT` reconciliation was completed through the Binance Agent OS MCP connected to the current Codex host and its OAuth-selected Agentic sub-account. UID, exact balances, order IDs and trade IDs are intentionally excluded from this public repository.
+One read-only `BTCUSDT` reconciliation was completed through the Binance Agent OS MCP connected to the current Codex host and its host-selected Agentic sub-account. UID, exact balances, order IDs and trade IDs are intentionally excluded from this public repository.
 
 验证结果：
 
@@ -36,6 +36,6 @@ Verified results:
 
 `mcp_spot_snapshot.py` converts host-supplied JSON shaped like the real responses into `McpReconciliationEvidence`. It verifies the expected account UID, Spot account type, trading permission, complete paginated fills, order/fill linkage, fee-adjusted base balance, available quote balance, pending orders and book. The single-symbol prototype fails closed on unexplained base inventory, third-asset fees or another nonzero asset until account-level risk accounting supports them.
 
-`mcp_readonly.py`现已提供独立工具发现、双层只读白名单、`tools/call`响应解码和可取消的有界成交/订单分页。客户端和HTTP传输层都会拒绝`spot.newOrder`等写工具。仅内存Token交换、一次性CLI和桌面账户页已经接线；当前仍缺可访问的项目Client Metadata及独立程序首次真实登录验收。设计上不做系统凭据持久化，重启必须重新授权。API Key替代路线没有启用。
+`mcp_readonly.py`保留为无网络的宿主侧协议校验器，提供工具发现、只读白名单、`tools/call`响应解码和有界成交/订单分页。桌面和`bstock-mcp-request`只导出无凭据请求；实际调用由已经授权的Codex宿主完成。项目不实现OAuth、Token持久化或直接HTTP传输，API Key替代路线也没有启用。
 
-`mcp_readonly.py` now provides independent discovery, defense-in-depth read allowlisting, `tools/call` result decoding and cancelable bounded fill/order pagination. Memory-only token exchange, the one-shot CLI and the desktop Account tab are wired. Both client and HTTP layers reject write tools such as `spot.newOrder`. A reachable project Client Metadata document and the standalone app's first live login remain pending. Credential persistence is deliberately excluded; restart requires reauthorization. No API-key fallback is enabled.
+`mcp_readonly.py` remains a network-free host-side protocol validator with discovery, read allowlisting, `tools/call` decoding and bounded fill/order pagination. The desktop and `bstock-mcp-request` only export credential-free requests; the already-authorized Codex host owns actual calls. The project implements no OAuth, token persistence or direct HTTP transport, and no API-key fallback is enabled.
