@@ -7,6 +7,7 @@
 - 默认单笔100、累计亏损10停买、卖出继续等待策略信号、手动恢复等本地风控。
 - Spot成交账本、权益风险、执行互斥、确定性客户端订单ID和UNKNOWN只查单恢复。
 - 现有Codex Binance MCP宿主的无凭据读取请求与订单计划交接。
+- 脱敏宿主回执、显式首次账户指纹登记、后续账户漂移拒绝和桌面导入。
 - Agentic Wallet作为彼此独立的BSC执行通道，不作为MCP失败时的自动回退。
 
 - Unified strategy registry with Spot/Web3/Futures tags; MTF, Median and Range share one interface, with Slope excluded.
@@ -14,6 +15,7 @@
 - Local controls including 100-unit entries, cumulative-loss 10 BUY latch, strategy-led exits and manual resume.
 - Spot ledger/equity risk, execution lock, deterministic client IDs and lookup-only UNKNOWN recovery.
 - Credential-free handoff to the existing Codex Binance MCP host.
+- Sanitized host receipts, explicit first fingerprint enrollment, account-drift rejection and desktop import.
 - Agentic Wallet remains an independent BSC transport, never an automatic MCP fallback.
 
 ## 已纠正 / Corrected
@@ -24,15 +26,17 @@ The desktop was previously and incorrectly treated as a new Binance OAuth Agent.
 
 ## 尚待验收 / Remaining acceptance
 
-1. Codex宿主读取请求、返回脱敏结果并由本地严格对账的端到端自动化。
-2. 策略信号、风险闸门、宿主确认、最小订单、终态和账本回写的完整闭环。
-3. 持续真实行情/断线恢复和桌面长时运行。
-4. 多币种真实账户级风险；当前仍按单标的原型失败关闭。
+1. 用新回执格式执行一次真实只读验收；当前只完成离线协议和故障测试。
+2. Codex宿主自动拾取请求/返回回执的持续编排。
+3. 策略信号、风险闸门、宿主确认、最小订单、终态和账本回写的完整闭环。
+4. 持续真实行情/断线恢复和桌面长时运行。
+5. 多币种真实账户级风险；当前仍按单标的原型失败关闭。
 
-1. End-to-end Codex-host request consumption, sanitized response and strict local reconciliation.
-2. Full signal/risk/host-confirmation/minimum-order/terminal-state/ledger loop.
-3. Sustained live data, reconnect recovery and long-running desktop acceptance.
-4. Multi-symbol live account risk; the current prototype remains fail-closed for one symbol.
+1. One live read-only acceptance using the new receipt format; only offline protocol/failure tests exist today.
+2. Sustained orchestration for Codex to pick up requests and return receipts automatically.
+3. Full signal/risk/host-confirmation/minimum-order/terminal-state/ledger loop.
+4. Sustained live data, reconnect recovery and long-running desktop acceptance.
+5. Multi-symbol live account risk; the current prototype remains fail-closed for one symbol.
 
 任何API Key或其他无人值守接口都不在当前授权范围，必须先讨论并取得用户明确允许。
 

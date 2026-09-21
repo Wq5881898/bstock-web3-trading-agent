@@ -57,7 +57,31 @@ def mcp_request_file(symbol: str) -> Path:
         f"{normalized}-read-request.json"
 
 
-def create_monitor_class(engine_factory=None, bridge_writer=None):
+def mcp_receipt_file(symbol: str) -> Path:
+    request = mcp_request_file(symbol)
+    return request.with_name(f"{symbol.strip().lower()}-host-receipt.json")
+
+
+def import_mcp_host_receipt(symbol: str):
+    from .mcp_bridge import (load_mcp_account_binding,
+                             load_mcp_read_request)
+    from .mcp_host_receipt import (load_json_document,
+        verify_spot_host_receipt, write_verified_receipt)
+    request_path = mcp_request_file(symbol)
+    receipt_path = mcp_receipt_file(symbol)
+    binding_path = request_path.parent / "account-binding.json"
+    request = load_mcp_read_request(request_path)
+    binding = load_mcp_account_binding(binding_path)
+    receipt = verify_spot_host_receipt(request, binding,
+        load_json_document(receipt_path, "MCP host receipt"))
+    verified_path = request_path.parent / \
+        f"{symbol.strip().lower()}-verified-snapshot.json"
+    write_verified_receipt(receipt, verified_path)
+    return verified_path, receipt.summary()
+
+
+def create_monitor_class(engine_factory=None, bridge_writer=None,
+                         receipt_importer=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
@@ -68,12 +92,18 @@ def create_monitor_class(engine_factory=None, bridge_writer=None):
             if strategy_spec(config.strategy_kind).input_kind == "aggregate-trades" else BStockEngine(config))
     if bridge_writer is None:
         from .mcp_bridge import (build_mcp_spot_read_request,
+                                 load_or_create_mcp_account_binding,
                                  write_mcp_read_request)
         def bridge_writer(symbol):
-            request = build_mcp_spot_read_request(symbol)
             path = mcp_request_file(symbol)
+            binding = load_or_create_mcp_account_binding(
+                path.parent / "account-binding.json")
+            request = build_mcp_spot_read_request(
+                symbol, account_binding=binding)
             write_mcp_read_request(request, path)
             return path, request
+    if receipt_importer is None:
+        receipt_importer = import_mcp_host_receipt
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -307,9 +337,13 @@ def create_monitor_class(engine_factory=None, bridge_writer=None):
             self.mcp_connect = QtWidgets.QPushButton(
                 "导出Codex读取请求 / Export Codex read request")
             self.mcp_connect.clicked.connect(self.export_mcp_read_request)
+            self.mcp_import = QtWidgets.QPushButton(
+                "导入Codex回执 / Import Codex receipt")
+            self.mcp_import.clicked.connect(self.import_mcp_receipt)
             mcp_row.addWidget(QtWidgets.QLabel("MCP Spot标的 / Symbol"))
             mcp_row.addWidget(self.mcp_symbol)
             mcp_row.addWidget(self.mcp_connect)
+            mcp_row.addWidget(self.mcp_import)
             mcp_row.addStretch(1)
             account_layout.addLayout(mcp_row)
             self.mcp_status = QtWidgets.QLabel(
@@ -574,12 +608,38 @@ def create_monitor_class(engine_factory=None, bridge_writer=None):
                     raise ValueError("MCP bridge symbol mismatch")
                 self.mcp_status.setText(
                     f"读取请求已导出：{path}\n"
+                    f"回执放置位置：{mcp_receipt_file(symbol)}\n"
                     "请由当前已授权的Codex任务读取并执行；未启动OAuth，也未调用MCP。\n"
                     f"Request exported: {path}\n"
                     "Hand it to the authorized Codex task; no OAuth or MCP call was started here.")
             except Exception as exc:
                 self.mcp_status.setText(
                     f"导出读取请求失败 / Read-request export failed: {exc}")
+
+        def import_mcp_receipt(self):
+            symbol = self.mcp_symbol.text().strip().upper()
+            if not re.fullmatch(r"[A-Z0-9]{1,32}", symbol):
+                self.mcp_status.setText(
+                    "标的格式错误 / Invalid Spot symbol")
+                return
+            try:
+                path, summary = receipt_importer(symbol)
+                self.mcp_account_summary.setText(
+                    f"{summary['accountRef']} · {summary['symbol']} · "
+                    f"canTrade={summary['canTrade']}\n"
+                    f"quoteAvailable={summary['availableQuote']} · "
+                    f"positionQty={summary['positionQuantity']} · "
+                    f"positionCost={summary['positionCost']}\n"
+                    f"pendingOrder={summary['pendingOrderId'] or 'none'} · "
+                    f"observedAt={summary['observedAt']}")
+                self.mcp_status.setText(
+                    f"Codex回执已严格核对：{path}\n"
+                    "Codex receipt verified; no OAuth or order was started here.")
+            except Exception as exc:
+                self.mcp_account_summary.setText(
+                    "本次无有效Codex快照 / No valid Codex snapshot from this attempt")
+                self.mcp_status.setText(
+                    f"导入Codex回执失败 / Codex receipt import failed: {exc}")
 
         def show_confirmed_order_prompt(self, preview, on_confirmed, on_cancelled,
                                         *, clock_ms=None):

@@ -64,7 +64,7 @@ it is **not an unattended live-trading release**.
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、最小Spot规则、部分成交及超时/重启只查单 / Exact confirmation, 15-second expiry, pre-submit checks, minimal Spot rules, partial fills and lookup-only recovery | 注入假宿主调用验收；未接桌面真实提交 / Tested with an injected host caller; no desktop live submission |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | [离线验收](docs/MCP_CONFIRMED_HOST.md)；网络和认证归Codex宿主 / Offline accepted; Codex owns network and auth |
 | 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
-| Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、订单计划、宿主确认边界、结果严格对账 / Credential-free reads/plans, host confirmation and strict result reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
+| Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
 | Spot成交账本 / Spot fill ledger | 成交ID幂等、基础/报价手续费、移动平均成本、已实现盈亏、锁与原子检查点 / Idempotent fills, base/quote fees, average cost, realized PnL and locked atomic checkpoints | [离线模块](docs/SPOT_FILL_LEDGER.md)；真实宿主接线未完成 / Offline module; live-host wiring pending |
 | Spot权益风险 / Spot equity risk | UTC基准、买一价估值、资金流调整，以及成交推导的开仓/连亏计数 / UTC baselines, best-bid valuation, cash-flow adjustment and fill-derived entry/loss counters | [离线模块](docs/SPOT_EQUITY_RISK.md)；完整资金流水源和桌面编排未完成 / Offline module; complete cash-flow source and desktop orchestration pending |
 | MCP只读请求 / MCP read request | 桌面/CLI导出限时无凭据请求；由已授权Codex宿主执行 / Desktop/CLI exports a short-lived credential-free request executed by the authorized Codex host | 可用；本地不启动OAuth或网络连接 / Available; no local OAuth or network session |
@@ -91,8 +91,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**393项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **393 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**410项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **410 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -125,6 +125,10 @@ bstock-mcp-request --symbol BTCUSDT
 ```
 
 The command only writes `runtime/mcp/latest-read-request.json`. Give it to the already-authorized Codex task, which uses its existing `binance-agent-os` connection. The project neither recreates the Agentic account nor starts OAuth.
+
+Codex返回脱敏回执后，使用`bstock-mcp-import`进行严格核对。首次绑定必须显式添加`--enroll-account`；后续不同账户指纹会被拒绝。桌面账户页也提供导出请求和导入已绑定回执按钮。完整步骤见[Codex MCP宿主桥接](docs/MCP_HOST_BRIDGE.md)。
+
+After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The first binding requires explicit `--enroll-account`; later fingerprint changes are rejected. The desktop Account tab can export requests and import receipts for an already-enrolled account. See [Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md).
 
 技术说明 / Technical notes:
 [MCP确认执行器（离线）/ Confirmed MCP executor (offline)](docs/MCP_CONFIRMED_EXECUTOR.md) ·
@@ -289,7 +293,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `393 passed`
+- 本地自动化测试 / Local automated tests: `410 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

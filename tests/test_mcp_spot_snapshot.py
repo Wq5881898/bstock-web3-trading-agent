@@ -4,7 +4,8 @@ from decimal import Decimal
 import pytest
 
 from bstock_web3.mcp_spot_snapshot import (LocalRiskMetrics,
-    build_local_risk_metrics, build_mcp_spot_evidence)
+    build_bound_mcp_spot_evidence, build_local_risk_metrics,
+    build_mcp_spot_evidence)
 from bstock_web3.spot_equity_risk import EquityRiskResult
 
 
@@ -39,6 +40,19 @@ def test_wrong_agentic_account_is_rejected():
     values["expected_uid"] = 999
     with pytest.raises(ValueError, match="identity mismatch"):
         build_mcp_spot_evidence(**values)
+
+
+def test_sanitized_account_requires_verified_opaque_binding():
+    values = fixture()
+    values["account"] = deepcopy(values["account"])
+    values["account"].pop("uid")
+    values.pop("expected_uid")
+    values["account_binding_verified"] = True
+    result = build_bound_mcp_spot_evidence(**values)
+    assert result.account_ref == "agentic-test"
+    values["account_binding_verified"] = False
+    with pytest.raises(ValueError, match="binding"):
+        build_bound_mcp_spot_evidence(**values)
 
 
 def test_incomplete_history_or_unexplained_balance_is_rejected():

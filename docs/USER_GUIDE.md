@@ -91,6 +91,7 @@ bstock-history --help
 bstock-backtest --help
 bstock-mcp-plan --help
 bstock-mcp-request --help
+bstock-mcp-import --help
 ```
 
 测试失败时不要继续连接实盘通道；以当前提交的CI结果为准。
@@ -179,6 +180,10 @@ bstock-mcp-request --symbol BTCUSDT
 也可以打开桌面程序的“账户 / Account”页，输入Spot交易对后点击“导出Codex读取请求”。两种入口都只写本地JSON，不登录、不调用MCP、不下单。然后让当前Codex任务读取请求并通过已有连接完成只读核对。
 
 Run `bstock-mcp-request --symbol BTCUSDT`, or use “Export Codex read request” on the desktop Account tab. Both paths only write local JSON: no login, MCP call or order. Ask the current Codex task to consume the request through its existing connection.
+
+Codex按[MCP宿主桥接](MCP_HOST_BRIDGE.md)生成脱敏回执后，首次用`bstock-mcp-import --enroll-account`明确钉住所选账户；以后直接在桌面点击“导入Codex回执”，或运行不带登记参数的导入命令。账户绑定、请求和回执都只放在被Git忽略的`runtime/`目录。
+
+After Codex produces a sanitized receipt per [MCP host bridge](MCP_HOST_BRIDGE.md), explicitly pin the selected account once with `bstock-mcp-import --enroll-account`. Later use “Import Codex receipt” in the desktop or run the importer without enrollment. Binding/request/receipt files remain under Git-ignored `runtime/`.
 
 在已连接 MCP 的 Agent 中输入：
 

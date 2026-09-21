@@ -24,6 +24,7 @@ bstock-backtest = "bstock_web3.backtest:main"
 bstock-desktop = "bstock_web3.desktop:main"
 bstock-mcp-plan = "bstock_web3.mcp_cli:main"
 bstock-mcp-request = "bstock_web3.mcp_request_cli:main"
+bstock-mcp-import = "bstock_web3.mcp_import_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

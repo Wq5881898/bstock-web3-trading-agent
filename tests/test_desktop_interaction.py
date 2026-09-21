@@ -327,6 +327,29 @@ def test_mcp_account_tab_exports_request_for_existing_codex_host(monkeypatch, tm
         window.close()
 
 
+def test_mcp_account_tab_imports_only_verified_host_summary(monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    calls = []
+    def writer(symbol):
+        return tmp_path / "request.json", SimpleNamespace(symbol=symbol)
+    def importer(symbol):
+        calls.append(symbol)
+        return tmp_path / "verified.json", {
+            "accountRef":"agentic-primary", "symbol":"BTCUSDT",
+            "canTrade":True, "availableQuote":"190.42",
+            "positionQuantity":"0.00011988", "positionCost":"9.57959880",
+            "pendingOrderId":None, "observedAt":"2026-09-21T12:00:10Z"}
+    window = create_monitor_class(lambda config: None, writer, importer)()
+    try:
+        window.mcp_import.click()
+        assert calls == ["BTCUSDT"]
+        assert "agentic-primary" in window.mcp_account_summary.text()
+        assert "190.42" in window.mcp_account_summary.text()
+        assert "receipt verified" in window.mcp_status.text()
+    finally:
+        window.close()
+
+
 def test_mcp_request_export_failure_can_retry(monkeypatch, tmp_path):
     monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
     attempts=[]

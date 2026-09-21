@@ -4,7 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from .mcp_bridge import build_mcp_spot_read_request, write_mcp_read_request
+from .mcp_bridge import (build_mcp_spot_read_request,
+    load_or_create_mcp_account_binding, write_mcp_read_request)
 
 
 def main() -> int:
@@ -18,9 +19,15 @@ def main() -> int:
         "--output", type=Path,
         default=Path("runtime") / "mcp" / "latest-read-request.json",
     )
+    parser.add_argument(
+        "--binding-file", type=Path,
+        default=Path("runtime") / "mcp" / "account-binding.json",
+    )
     args = parser.parse_args()
+    binding = load_or_create_mcp_account_binding(args.binding_file)
     request = build_mcp_spot_read_request(
-        args.symbol, max_age_seconds=args.max_age_seconds)
+        args.symbol, max_age_seconds=args.max_age_seconds,
+        account_binding=binding)
     write_mcp_read_request(request, args.output)
     print(json.dumps({
         "success": True,

@@ -63,10 +63,45 @@ def build_mcp_spot_evidence(
     base_asset: str, quote_asset: str, risk_day: str, observed_at_ms: int,
     evidence_id: str, risk: LocalRiskMetrics, trade_history_complete: bool,
 ) -> McpReconciliationEvidence:
-    """Fail closed unless the MCP reads describe one explainable Spot position."""
+    """Legacy in-memory path: verify the raw UID before discarding it."""
     if (not isinstance(account, dict) or type(expected_uid) is not int
             or account.get("uid") != expected_uid):
         raise ValueError("Agentic account identity mismatch")
+    return _build_mcp_spot_evidence(account=account, open_orders=open_orders,
+        trades=trades, all_orders=all_orders, book=book,
+        account_ref=account_ref, symbol=symbol, base_asset=base_asset,
+        quote_asset=quote_asset, risk_day=risk_day,
+        observed_at_ms=observed_at_ms, evidence_id=evidence_id, risk=risk,
+        trade_history_complete=trade_history_complete)
+
+
+def build_bound_mcp_spot_evidence(
+    *, account: dict, open_orders: list, trades: list, all_orders: list,
+    book: dict, account_ref: str, account_binding_verified: bool,
+    symbol: str, base_asset: str, quote_asset: str, risk_day: str,
+    observed_at_ms: int, evidence_id: str, risk: LocalRiskMetrics,
+    trade_history_complete: bool,
+) -> McpReconciliationEvidence:
+    """Persistable path: accept no UID and require a pinned host fingerprint."""
+    if account_binding_verified is not True:
+        raise ValueError("Verified Agentic account binding required")
+    if not isinstance(account, dict) or "uid" in account:
+        raise ValueError("Sanitized Spot account response required")
+    return _build_mcp_spot_evidence(account=account, open_orders=open_orders,
+        trades=trades, all_orders=all_orders, book=book,
+        account_ref=account_ref, symbol=symbol, base_asset=base_asset,
+        quote_asset=quote_asset, risk_day=risk_day,
+        observed_at_ms=observed_at_ms, evidence_id=evidence_id, risk=risk,
+        trade_history_complete=trade_history_complete)
+
+
+def _build_mcp_spot_evidence(
+    *, account: dict, open_orders: list, trades: list, all_orders: list,
+    book: dict, account_ref: str, symbol: str, base_asset: str,
+    quote_asset: str, risk_day: str, observed_at_ms: int,
+    evidence_id: str, risk: LocalRiskMetrics, trade_history_complete: bool,
+) -> McpReconciliationEvidence:
+    """Fail closed unless the reads describe one explainable Spot position."""
     if account.get("accountType") != "SPOT" or type(account.get("canTrade")) is not bool:
         raise ValueError("Invalid Spot account response")
     if not isinstance(open_orders, list) or not isinstance(trades, list) \

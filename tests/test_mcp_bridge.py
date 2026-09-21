@@ -5,7 +5,8 @@ import pytest
 
 from bstock_web3.catalog import BStockAsset
 from bstock_web3.mcp_bridge import (MCP_SPOT_READ_TOOLS,
-    build_mcp_spot_plan, build_mcp_spot_read_request,
+    McpAccountBinding, build_mcp_spot_plan, build_mcp_spot_read_request,
+    load_mcp_account_binding, load_or_create_mcp_account_binding,
     write_mcp_read_request)
 from bstock_web3.strategy import SignalDecision
 
@@ -89,6 +90,8 @@ def test_read_request_targets_existing_codex_host_without_login_material(tmp_pat
     assert request.transport == "codex-binance-agent-os-mcp"
     assert request.account_scope == "existing-host-selected-agentic-sub-account"
     assert request.required_tools == MCP_SPOT_READ_TOOLS
+    assert request.account_binding["fingerprint"] is None
+    assert len(request.account_binding["salt"]) == 64
     assert request.requirements["local_oauth_prohibited"] is True
     request.require_current(now=now + timedelta(seconds=299))
     with pytest.raises(RuntimeError, match="expired"):
@@ -105,3 +108,12 @@ def test_read_request_targets_existing_codex_host_without_login_material(tmp_pat
 def test_read_request_rejects_invalid_symbol(symbol):
     with pytest.raises(ValueError, match="symbol"):
         build_mcp_spot_read_request(symbol)
+
+
+def test_account_binding_is_created_once_and_not_replaced(tmp_path):
+    path = tmp_path / "binding.json"
+    first = load_or_create_mcp_account_binding(path)
+    second = load_or_create_mcp_account_binding(path)
+    assert first == second == load_mcp_account_binding(path)
+    assert first.fingerprint is None
+    assert McpAccountBinding.from_dict(first.to_dict()) == first
