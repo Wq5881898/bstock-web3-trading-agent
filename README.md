@@ -105,6 +105,8 @@ market snapshot and do not trigger additional wallet calls or orders.
   Range EMA/Median read public NVDAB trades successfully; 1,000 warmup trades formed two 20-bps bars, so the strategies correctly remained unready with zero fills.
 - Agent OS MCP已完成一次BTCUSDT真实只读账户/余额/订单/成交/手续费/规则/盘口核对；未调用写工具。<br>
   Agent OS MCP completed one real read-only BTCUSDT account, balance, order, fill, commission, rule and book reconciliation; no write tool was called.
+- 2026-09-21，新回执格式也已通过真实闭环：无凭据请求、账户指纹绑定、完整分页、脱敏回执和严格导入均成功；运行时账户数据未进入Git。<br>
+  On 2026-09-21, the new receipt format also passed a live loop: credential-free request, account fingerprint binding, complete pagination, sanitized receipt and strict import all succeeded; runtime account data was not committed.
 - **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Codex宿主结果自动回传、
   策略到MCP人工确认订单的持续实盘验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,

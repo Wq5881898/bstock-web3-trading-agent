@@ -84,6 +84,6 @@ pagination的trades_complete/orders_complete只有在确实完整时才能为tru
 
 ## 当前验收边界 / Current acceptance boundary
 
-历史上已经通过Codex宿主完成真实只读核对和一笔约10 USDT的BTC买入；这些事实证明现有宿主链路可用。当前代码已完成无凭据请求、脱敏回执、显式首次绑定和本地严格导入，但尚未用新回执格式再次访问真实账户。自动策略到真实MCP订单的持续编排仍需单独验收。
+历史上已经通过Codex宿主完成真实只读核对和一笔约10 USDT的BTC买入。2026-09-21又使用当前代码的新回执格式完成一次真实`BTCUSDT`只读闭环：无凭据请求、7项MCP读取、完整分页、内存指纹计算、UID删除、显式首次绑定和本地严格导入全部通过，且没有调用任何写工具。自动策略到真实MCP订单的持续编排仍需单独验收。
 
-The existing Codex-hosted path previously completed live read reconciliation and an approximately 10-USDT BTC buy. The repository now implements credential-free requests, sanitized receipts, explicit first binding and strict local import, but the new receipt format has not yet been exercised against the live account. Sustained strategy-to-live-order orchestration remains separate acceptance.
+The existing Codex-hosted path previously completed live read reconciliation and an approximately 10-USDT BTC buy. On 2026-09-21, the current receipt format also completed a live `BTCUSDT` read loop: credential-free request, all seven MCP reads, complete pagination, in-memory fingerprint derivation, UID removal, explicit first binding and strict local import all passed, with no write tool called. Sustained strategy-to-live-order orchestration remains separate acceptance.
