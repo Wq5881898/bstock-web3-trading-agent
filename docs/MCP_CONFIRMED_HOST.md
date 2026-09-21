@@ -12,6 +12,18 @@
 
 `mcp_confirmed_host.py` is a network-free validation boundary reusable inside the authorized Codex MCP host. It allows seven Spot reads plus `spot.newOrder` and `spot.getOrder`, enforces deterministic project IDs and strict MARKET/FULL arguments, and requires compatible discovered schemas. Codex owns network, OAuth, tokens and actual tool calls. UNKNOWN outcomes remain lookup-only and are never resent.
 
+## 真实schema验收 / Live schema acceptance
+
+2026-09-21通过现有`binance-agent-os`连接读取了`spot.newOrder`和`spot.getOrder`的真实工具定义，但没有调用它们。验收确认：
+
+- `spot.newOrder`静态必填为`symbol/side/type`，MARKET金额按条件使用`quantity`或`quoteOrderQty`；
+- 两个金额字段在真实schema中是JSON `number`，而本地策略、风控和确认继续使用Decimal字符串；
+- 宿主边界仅在工具调用前转换金额，且要求JSON浮点文本与原Decimal完全相等；高精度有损值在调用前拒绝；
+- `spot.getOrder`静态只要求`symbol`，`orderId/origClientOrderId`为条件选择；本项目运行时仍严格只允许确定性`origClientOrderId`，从而保证UNKNOWN只查单；
+- enum门禁要求真实schema支持`BUY/SELL`、`MARKET`和`FULL`。
+
+On 2026-09-21, the existing `binance-agent-os` connection exposed the live definitions for `spot.newOrder` and `spot.getOrder`; neither tool was invoked. The live order schema uses JSON numbers for amount fields and conditional identifiers for order lookup. Internal Decimal strings remain exact through strategy/risk/confirmation and are converted only at the final boundary when the JSON float spelling round-trips exactly. Runtime lookup remains restricted to the deterministic `origClientOrderId` even though the server schema also offers `orderId`.
+
 ## 没有实现 / Not implemented
 
 本模块没有启动OAuth、保存Token、暴露真实桌面提交按钮或调用真实服务。完整流程仍需由现有Codex宿主完成：

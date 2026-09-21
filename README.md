@@ -62,7 +62,7 @@ it is **not an unattended live-trading release**.
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、最小Spot规则、部分成交及超时/重启只查单 / Exact confirmation, 15-second expiry, pre-submit checks, minimal Spot rules, partial fills and lookup-only recovery | 注入假宿主调用验收；未接桌面真实提交 / Tested with an injected host caller; no desktop live submission |
-| MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | [离线验收](docs/MCP_CONFIRMED_HOST.md)；网络和认证归Codex宿主 / Offline accepted; Codex owns network and auth |
+| MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
 | 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
 | Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
 | Spot成交账本 / Spot fill ledger | 成交ID幂等、基础/报价手续费、移动平均成本、已实现盈亏、锁与原子检查点 / Idempotent fills, base/quote fees, average cost, realized PnL and locked atomic checkpoints | [离线模块](docs/SPOT_FILL_LEDGER.md)；真实宿主接线未完成 / Offline module; live-host wiring pending |
@@ -91,8 +91,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**410项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **410 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**412项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **412 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,

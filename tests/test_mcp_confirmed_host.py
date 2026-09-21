@@ -12,10 +12,17 @@ def schema(name):
     fields = ({"symbol", "origClientOrderId"} if name == "spot.getOrder" else
         {"symbol", "side", "type", "newClientOrderId", "newOrderRespType",
          "quoteOrderQty", "quantity"})
-    required = (["symbol", "origClientOrderId"] if name == "spot.getOrder" else
+    required = (["symbol"] if name == "spot.getOrder" else
                 ["symbol", "side", "type"])
-    return {"type":"object", "properties":{key:{"type":"string"}
-            for key in fields}, "required":required, "additionalProperties":False}
+    properties = {key:{"type":"string"} for key in fields}
+    if name == "spot.newOrder":
+        properties["quantity"] = {"type":"number", "format":"float"}
+        properties["quoteOrderQty"] = {"type":"number", "format":"float"}
+        properties["side"]["enum"] = ["BUY", "SELL"]
+        properties["type"]["enum"] = ["MARKET", "LIMIT"]
+        properties["newOrderRespType"]["enum"] = ["ACK", "FULL"]
+    return {"type":"object", "properties":properties,
+            "required":required, "additionalProperties":False}
 
 
 def buy():
@@ -49,6 +56,10 @@ def test_confirmed_client_discovers_schema_and_calls_exact_order():
     client = ConfirmedMcpClient(exchange)
     client.initialize()
     assert client("spot.newOrder", buy()) == {"ok":True, "name":"spot.newOrder"}
+    order_call = next(row for row in exchange.calls
+                      if row.get("method") == "tools/call")
+    assert order_call["params"]["arguments"]["quoteOrderQty"] == 10.0
+    assert isinstance(order_call["params"]["arguments"]["quoteOrderQty"], float)
     lookup = {"symbol":"BTCUSDT", "origClientOrderId":"bstock-" + "a" * 28}
     assert client("spot.getOrder", lookup)["ok"]
 
@@ -114,15 +125,40 @@ def test_missing_tool_or_incompatible_schema_fails_initialization():
         ConfirmedMcpClient(missing).initialize()
 
     exchange = Exchange(); original = exchange.__call__
-    def numeric(message):
+    def invalid_amount(message):
         result = original(message)
         if message.get("method") == "tools/list":
             row = next(row for row in result["result"]["tools"]
                        if row["name"] == "spot.newOrder")
-            row["inputSchema"]["properties"]["quoteOrderQty"] = {"type":"number"}
+            row["inputSchema"]["properties"]["quoteOrderQty"] = {"type":"boolean"}
         return result
-    with pytest.raises(ValueError, match="string schema"):
-        ConfirmedMcpClient(numeric).initialize()
+    with pytest.raises(ValueError, match="amount schema"):
+        ConfirmedMcpClient(invalid_amount).initialize()
+
+
+def test_numeric_mcp_schema_rejects_lossy_decimal_before_tool_call():
+    exchange = Exchange(); client = ConfirmedMcpClient(exchange); client.initialize()
+    args = buy(); args["quoteOrderQty"] = "0.123456789012345678901"
+    before = len(exchange.calls)
+    with pytest.raises(ValueError, match="exactly"):
+        client.call("spot.newOrder", args)
+    assert len(exchange.calls) == before
+
+
+def test_string_amount_schema_remains_supported_without_conversion():
+    exchange = Exchange(); original = exchange.__call__
+    def strings(message):
+        result = original(message)
+        if message.get("method") == "tools/list":
+            row = next(row for row in result["result"]["tools"]
+                       if row["name"] == "spot.newOrder")
+            for key in ("quoteOrderQty", "quantity"):
+                row["inputSchema"]["properties"][key] = {"type":"string"}
+        return result
+    client = ConfirmedMcpClient(strings); client.initialize(); client.call(
+        "spot.newOrder", buy())
+    call = next(row for row in exchange.calls if row.get("method") == "tools/call")
+    assert call["params"]["arguments"]["quoteOrderQty"] == "10.00"
 
 
 def test_schema_rejects_extra_required_or_missing_contract_field():

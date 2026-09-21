@@ -8,6 +8,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import math
 import re
 
 from .mcp_discovery import DiscoveryClient
@@ -79,6 +80,40 @@ def _allows_string(schema):
             and any(_allows_string(item) for item in alternatives))
 
 
+def _allows_number(schema):
+    if not isinstance(schema, dict):
+        return False
+    kind = schema.get("type")
+    if kind == "number" or isinstance(kind, list) and "number" in kind:
+        return True
+    alternatives = schema.get("anyOf") or schema.get("oneOf")
+    return (isinstance(alternatives, list) and alternatives
+            and any(_allows_number(item) for item in alternatives))
+
+
+def _wire_decimal(value, schema):
+    """Adapt an internal exact decimal string to the discovered wire schema.
+
+    The real Binance MCP schema currently declares order amounts as JSON
+    numbers.  Keep strings throughout policy/confirmation handling and convert
+    only at the final host boundary.  Conversion fails closed unless Python's
+    JSON float spelling round-trips to the exact same Decimal value.
+    """
+    if _allows_string(schema):
+        return value
+    if not _allows_number(schema):
+        raise ValueError("Unsupported confirmed MCP amount schema")
+    try:
+        exact = Decimal(value)
+        wire = float(value)
+    except (InvalidOperation, OverflowError, TypeError, ValueError):
+        raise ValueError("Spot amount cannot be represented by MCP schema") from None
+    if (not math.isfinite(wire) or wire <= 0
+            or Decimal(str(wire)) != exact):
+        raise ValueError("Spot amount cannot be represented exactly by MCP schema")
+    return wire
+
+
 def validate_confirmed_schema(name, schema):
     """Fail closed if live tool discovery is incompatible with our contract."""
     expected = ({"symbol", "origClientOrderId"} if name == "spot.getOrder" else
@@ -94,12 +129,33 @@ def validate_confirmed_schema(name, schema):
             or not set(required) <= expected
             or not {"symbol"} <= set(required)):
         raise ValueError("Incompatible confirmed MCP schema")
-    minimum_required = ({"origClientOrderId"} if name == "spot.getOrder" else
-                        {"side", "type"})
+    # getOrder documents orderId/origClientOrderId as a conditional choice, so
+    # the live schema correctly requires only symbol.  Runtime validation above
+    # still requires exactly origClientOrderId for lookup-only recovery.
+    minimum_required = (set() if name == "spot.getOrder" else {"side", "type"})
     if not minimum_required <= set(required):
         raise ValueError("Incompatible confirmed MCP required fields")
-    if any(not _allows_string(properties[key]) for key in expected):
+    text_fields = ({"symbol", "origClientOrderId"} if name == "spot.getOrder"
+        else {"symbol", "side", "type", "newClientOrderId",
+              "newOrderRespType"})
+    if any(not _allows_string(properties[key]) for key in text_fields):
         raise ValueError("Confirmed MCP string schema required")
+    if name == "spot.newOrder" and any(
+            not (_allows_string(properties[key])
+                 or _allows_number(properties[key]))
+            for key in ("quoteOrderQty", "quantity")):
+        raise ValueError("Confirmed MCP amount schema required")
+    if name == "spot.newOrder":
+        enum_requirements = {
+            "side": {"BUY", "SELL"}, "type": {"MARKET"},
+            "newOrderRespType": {"FULL"},
+        }
+        for key, values in enum_requirements.items():
+            enum = properties[key].get("enum")
+            if enum is not None and (not isinstance(enum, list)
+                    or any(not isinstance(item, str) for item in enum)
+                    or not values <= set(enum)):
+                raise ValueError("Incompatible confirmed MCP enum")
 
 
 class ConfirmedMcpClient:
@@ -145,11 +201,18 @@ class ConfirmedMcpClient:
             ReadOnlyMcpClient._validate_arguments(tool_name, arguments)
         else:
             validate_confirmed_arguments(tool_name, arguments)
+        wire_arguments = dict(arguments)
+        if tool_name == "spot.newOrder":
+            amount_name = "quoteOrderQty" if "quoteOrderQty" in arguments \
+                else "quantity"
+            wire_arguments[amount_name] = _wire_decimal(
+                arguments[amount_name], self._schemas[tool_name]["properties"]
+                [amount_name])
         self._next_id += 1
         request_id = self._next_id
         reply = self._exchange({"jsonrpc":"2.0", "id":request_id,
             "method":"tools/call", "params":{"name":tool_name,
-                                                "arguments":dict(arguments)}})
+                                                "arguments":wire_arguments}})
         if (not isinstance(reply, dict) or reply.get("jsonrpc") != "2.0"
                 or type(reply.get("id")) is not int or reply["id"] != request_id
                 or "error" in reply or not isinstance(reply.get("result"), dict)):
