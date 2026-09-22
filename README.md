@@ -12,14 +12,13 @@
 
 - **Binance Agent OS MCP**：通过现有、已授权的Codex MCP宿主访问其所选Agentic子账户。
 - **Binance Agentic Wallet (`baw`)**：在 BSC 上执行 bStock 报价和链上交易。
-- **Binance Spot API**：显式启动的单标的MTF常驻自动执行原型；与已有Agentic子账户并不自动共享资金或身份。
 
 本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认桌面模式为模拟盘，
-不会自动调用 MCP、钱包或执行真实交易；独立`bstock-auto`命令需要显式选择测试网或生产网。
+不会自动调用 MCP、钱包或执行真实交易。
 
-最终产品目标是：用户一次启动后，由选定策略在绑定的Agentic Spot账户中持续自动交易，直到用户结束；逐笔确认只属于诊断/最小金额验收模式。范围、状态机、验收条件及当前MCP宿主阻塞以[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)为最高优先级依据。
+最终产品目标是：用户一次启动后，程序持续获取行情、运行选定策略和风控、生成真实交易候选，直到用户停止；真实订单只通过现有Codex MCP连接和现有Agentic子账户执行，并按Binance Agentic MCP规则逐笔确认。范围、状态机和验收条件以[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[MCP + Agentic收尾总计划](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)为最高优先级依据。
 
-The final product goal is a once-started, strategy-driven autonomous session running until the operator stops it. Per-order confirmation is diagnostic only. The current [Spot API service prototype](docs/AUTONOMOUS_SPOT_API_CLOSEOUT.md) is separate from the funded Agentic account and has not passed live acceptance. The [Autonomous Trading Product Baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) remains the highest-priority product source.
+The final product goal is a once-started session that continuously reads markets, evaluates the selected strategy and risk, and emits real-trade candidates until stopped. Real orders use only the existing Codex MCP connection and existing Agentic sub-account, with per-action confirmation required by Binance Agentic MCP. The [product baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) are the highest-priority sources.
 
 ## 核心功能 / Key Features
 
@@ -57,7 +56,6 @@ it is **not an unattended live-trading release**.
 
 | 模块 / Module | 新增能力 / Added capabilities | 状态 / Status |
 | --- | --- | --- |
-| Spot API常驻原型 / Spot API service prototype | 单次启动、MTF自动BUY/SELL、全量成交对账、UNKNOWN只查单、stop/resume控制 / One start, automatic MTF BUY/SELL, complete fill reconciliation, lookup-only UNKNOWN, stop/resume controls | 离线测试通过；未核验真实API账户或24小时实盘 / Offline tests pass; live account and 24-hour run unverified |
 | 桌面监控 / Desktop | 后台单线程评估、等待安全停止、状态窗口互斥、非阻塞风控弹窗、模拟账户及逐笔策略最近100笔成交 / Single-worker evaluation, safe-stop waiting, per-state locking, nonmodal alerts, paper account and latest 100 tick-strategy fills | 可用 / Available |
 | K线页 / Candles | 1m/5m已收盘K线、UTC时间、失败后历史数据标记 / Closed 1m/5m candles, UTC timestamps and historical-data markers after failures | 可用 / Available |
 | 模拟风控 / Paper risk | 日累计净值亏损、连亏次数、每日开仓次数、冷却和持仓成本上限 / Daily equity loss, loss streak, daily entries, cooldown and position cost cap | MTF、Median、Range模拟可用 / Available in MTF, Median and Range paper modes |
@@ -153,6 +151,7 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [MCP文件化执行交接 / MCP file-safe execution handoff](docs/MCP_EXECUTION_HANDOFF.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
+[MCP + Agentic收尾总计划 / Closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) ·
 [回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
 

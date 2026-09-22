@@ -1,90 +1,98 @@
 # 自动交易产品基准 / Autonomous Trading Product Baseline
 
-> 本文档是本项目产品目标的最高优先级来源。README、用户指南、技术设计或代码与本文冲突时，以本文为准，冲突内容必须纠正，不能静默降低产品目标。
+> 本文档与[收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)共同构成最高优先级产品依据。下级文档或代码冲突时必须先纠正，不能自行改变账户、认证或执行接口。
 >
-> This is the highest-priority product source of truth. Conflicting README, guide, design or implementation text must be corrected; the product goal must never be silently downgraded.
+> This document and the [closeout master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) are the highest-priority product sources. Conflicts must be corrected before implementation; account, authentication, and execution transports cannot be changed by inference.
 
 ## 唯一主目标 / Single primary objective
 
-用户选择单一标的、统一策略和风险参数，发出一次启动命令。此后程序持续获取行情、产生策略信号、核对绑定的Spot账户、自动买入或卖出、查询订单终态并更新账本，直到用户发出结束命令。原目标优先使用Agentic账户；当前MCP宿主不支持无人值守写操作后，经用户明确批准，另建独立API账户路线，不得假称二者是同一账户。
+用户选择单一标的、统一策略和风险参数并发出一次启动命令。程序持续拉取行情、运行策略和风控、生成真实交易候选并维护会话，直到用户停止。所有真实订单通过现有 Codex `binance-agent-os` MCP 连接和现有 Agentic 子账户执行；按照 Binance Agentic MCP 规则，每一个非只读动作必须先取得用户当笔确认。
 
-The operator selects one symbol, a registered strategy and risk settings, then issues one start command. The process continuously reads market data, evaluates signals, reconciles the bound Spot account, buys or sells automatically, resolves terminal order state and updates its ledger until the operator issues stop. The original preference is the Agentic account; after the current MCP host proved unsuitable for unattended writes, the operator separately approved an independent API-account route. These accounts must never be represented as identical without verification.
+The operator selects one symbol, a unified strategy and risk settings, then issues one start command. The service continuously reads markets, evaluates strategy and risk, emits real-trade candidates, and maintains its session until stopped. Every real order uses the existing Codex `binance-agent-os` MCP connection and existing Agentic sub-account; under the Binance Agentic MCP contract, every non-read action requires explicit per-action confirmation.
 
-逐笔人工确认不是主产品流程，只允许作为诊断和最小金额验收模式。启动授权必须绑定实际执行账户指纹、单一标的、策略配置和风险配置；它不是无限账户授权。
+持续自动化的范围是行情、策略、风控、候选生成、状态恢复和终态对账。官方 MCP 当前不提供零确认的真实写操作，因此“完全无人确认下单”不属于本版本验收。
 
-Per-order confirmation is diagnostic/minimum-size acceptance mode only, not the product path. The start authorization is bound to the actual execution account fingerprint, one symbol, strategy configuration and risk configuration; it is not unrestricted account authority.
+Continuous automation covers market data, strategy, risk, candidate generation, recovery, and terminal reconciliation. The official MCP does not currently expose zero-confirmation writes, so fully unattended real ordering is not an acceptance claim for this release.
 
-## 已确定的MVP范围 / Fixed MVP scope
+## 已确定的 MVP 范围 / Fixed MVP scope
 
-- Binance Spot；MCP优先。2026-09-22用户已明确批准单独实现API自动执行路线；仍不自动在MCP、API或Agentic Wallet之间切换；
-- 单标的、单策略、单持仓；多币种和Futures不阻塞MVP；
-- 默认单笔预算100 USDT，累计权益亏损10 USDT后锁定新买入；
-- 最大持仓成本、每日开仓次数、连亏次数和开仓冷却继续使用现有风控；
-- BUY暂停后，已有持仓仍按原策略SELL信号自动退出；
+- Binance Agentic 子账户 Spot，且只通过现有 Codex MCP 宿主执行；
+- 不创建 API Key、不新建账户、不重做 OAuth、不静默回退到 REST API 或 Agentic Wallet；
+- 单标的、单策略、单持仓；多标的和 Futures 不阻塞 MVP；
+- 默认单次买入预算 100 USDT，累计权益亏损达到 10 USDT 后锁定新买入；
+- BUY 暂停后继续产生合法 SELL 信号；真实 SELL 同样要求当笔确认；
 - 风控恢复必须由用户明确发出，不重置仍然有效的风险数字；
-- 用户结束时不强制清仓：停止接受新策略动作，先核对未决订单，再退出；
-- 网络故障自动退避重连；订单结果不确定时只按确定性客户端订单ID查单，绝不重发；
-- 意外进程重启进入安全恢复状态，不自动新开仓；用户明确恢复后继续。
+- 停止时不强制清仓：拒绝新策略动作，核对未决动作后退出；
+- 网络或订单结果不确定时失败关闭；`UNKNOWN` 只按确定性客户端订单 ID 查单，绝不重发；
+- 意外重启进入恢复状态，不自动新开仓。
 
-- Binance Spot; MCP first. On 2026-09-22 the operator explicitly approved a separate API-backed autonomous route; there is still no silent MCP/API/Agentic Wallet fallback;
-- one symbol, one strategy and one position; multi-symbol and Futures do not block MVP;
-- default 100-USDT order budget and a 10-USDT cumulative equity-loss BUY latch;
-- retain the existing position-cost, daily-entry, losing-streak and cooldown controls;
-- after a BUY latch, an existing position still follows automatic strategy SELL signals;
+- Binance Agentic Spot through the existing Codex MCP host only;
+- no API key, new account, custom OAuth, silent REST API fallback, or Agentic Wallet fallback;
+- one symbol, one strategy, and one position; multi-symbol and Futures do not block the MVP;
+- default 100-USDT entry budget and a 10-USDT cumulative equity-loss BUY latch;
+- valid SELL signals continue while BUY is paused; a real SELL still requires per-action confirmation;
 - resume is explicit and never resets active risk measurements;
-- stop does not force liquidation: stop accepting new strategy actions, reconcile any in-flight order, then exit;
-- retry network reads with backoff; an uncertain order is lookup-only by deterministic client order ID and is never resubmitted;
-- an unexpected process restart enters safe recovery and cannot open a new position until explicit resume.
+- stop does not force liquidation: reject new strategy actions, reconcile in-flight work, then exit;
+- failures close safely; `UNKNOWN` is lookup-only by deterministic client order ID and is never resubmitted;
+- unexpected restart enters recovery and cannot automatically open a new position.
 
 ## 必须通过的验收 / Required acceptance
 
 | ID | 验收条件 / Acceptance criterion |
-| --- | --- |
-| AUTO-001 | 一次启动后进入持久化`RUNNING`会话；账户、标的、策略和风险配置不可漂移。 / One start creates a durable `RUNNING` session with immutable account, symbol, strategy and risk bindings. |
-| AUTO-002 | `RUNNING`中连续多笔BUY/SELL不请求逐笔确认。 / Multiple BUY/SELL actions run without per-order prompts. |
-| AUTO-003 | 每笔订单前使用新鲜账户、余额、挂单、成交、交易规则、手续费和盘口数据重新风控。 / Every order uses fresh account, balance, open-order, fill, rule, commission and book data. |
-| AUTO-004 | 累计亏损达到10后自动进入`BUY_PAUSED`，禁止BUY但不压制合法SELL。 / A 10-unit loss enters `BUY_PAUSED`, blocking BUY while allowing valid SELL. |
-| AUTO-005 | 同一策略事件和订单身份不可重复提交；UNKNOWN只查单。 / A signal/order identity cannot be resubmitted; UNKNOWN is lookup-only. |
-| AUTO-006 | 成交、手续费、持仓成本和权益先可靠写入账本，再允许下一笔。 / Fills, fees, position cost and equity are durably reconciled before the next order. |
-| AUTO-007 | 用户结束后不再接受新策略动作；未决订单核对完成后进入`STOPPED`。 / Stop rejects new strategy actions and reaches `STOPPED` after in-flight reconciliation. |
-| AUTO-008 | 断网、限流、MCP错误和进程重启均失败关闭，不产生重复订单。 / Disconnects, rate limits, MCP errors and restarts fail closed without duplicate orders. |
-| AUTO-009 | 至少完成24小时小额单标的运行，并完成一次自动买入和一次策略自动卖出。 / Complete at least 24 hours of small single-symbol operation with one automatic BUY and one strategy-driven automatic SELL. |
-| AUTO-010 | MCP不满足AUTO-002时停止开发并报告阻塞；未经用户明确批准不得启用API。 / If MCP cannot satisfy AUTO-002, stop and report the blocker; API requires separate explicit approval. |
+|---|---|
+| MCP-AUTO-001 | 一次启动建立持久化会话；账户指纹、标的、策略版本和风险配置不可漂移。 / One start creates a durable session with immutable account fingerprint, symbol, strategy version, and risk configuration. |
+| MCP-AUTO-002 | 行情、策略和风控持续自动运行；每个真实非只读动作必须逐笔明确确认。 / Market, strategy, and risk loops run continuously; every real non-read action requires explicit per-action confirmation. |
+| MCP-AUTO-003 | 每笔动作前核对新鲜账户、余额、挂单、成交、规则、手续费和盘口。 / Every action uses fresh account, balance, open-order, fill, rule, commission, and book data. |
+| MCP-AUTO-004 | 累计亏损达到 10 USDT 后进入 `BUY_PAUSED`，禁止 BUY 但继续合法 SELL 信号。 / A 10-USDT cumulative loss enters `BUY_PAUSED`, blocking BUY while allowing valid SELL signals. |
+| MCP-AUTO-005 | 同一策略事件和订单身份不可重复提交；`UNKNOWN` 只查单。 / A signal/order identity cannot be resubmitted; `UNKNOWN` is lookup-only. |
+| MCP-AUTO-006 | 成交、手续费、持仓成本和权益可靠写入账本后才能处理下一动作。 / Fills, fees, position cost, and equity are durably reconciled before the next action. |
+| MCP-AUTO-007 | 用户停止后拒绝新策略动作；未决动作核对完成后进入 `STOPPED`。 / Stop rejects new strategy actions and reaches `STOPPED` after in-flight reconciliation. |
+| MCP-AUTO-008 | 断网、限流、MCP 错误、过期确认和进程重启均失败关闭，不重复订单。 / Disconnects, rate limits, MCP failures, expired confirmations, and restarts fail closed without duplicate orders. |
+| MCP-AUTO-009 | 完成至少 24 小时小额单标的监督运行，包含一笔经确认的策略 BUY 和一笔经确认的策略 SELL。 / Complete at least 24 hours of supervised small single-symbol operation with one confirmed strategy BUY and one confirmed strategy SELL. |
+| MCP-AUTO-010 | 全流程不创建或使用 API Key，不新建账户，不切换执行通道。 / The full flow creates or uses no API key, creates no account, and switches no execution transport. |
 
 ## 状态机 / Session lifecycle
 
 ```text
-STOPPED --用户启动--> STARTING --核对通过--> RUNNING
-                                           |      |
-                                  风控触线 |      | 用户结束
-                                           v      v
-                                      BUY_PAUSED  STOPPING
-                                           |      |
-                                      用户恢复    | 核对未决订单
-                                           v      v
-                                        RUNNING  STOPPED
+STOPPED --用户启动--> STARTING --只读核对通过--> RUNNING
+                                                |      |
+                                       风控触线 |      | 用户停止
+                                                v      v
+                                           BUY_PAUSED  STOPPING
+                                                |      |
+                                           用户恢复    | 核对未决动作
+                                                v      v
+                                             RUNNING  STOPPED
 
+BUY/SELL 候选 -> WAITING_CONFIRMATION -> CONFIRMED -> SUBMITTING -> 终态/账本
+                                       \-> REJECTED/EXPIRED -> 本次动作结束
 任何不确定订单 -> RECOVERY_ONLY -> 只读查单/对账 -> 原状态或人工处理
 ```
 
-## 当前执行通道决定与剩余验收 / Transport decision and remaining acceptance
+## 已验证事实与剩余工作 / Verified facts and remaining work
 
-2026-09-22只读核验确认：现有`binance-agent-os` MCP连接仍然有效，Agentic Spot账户`canTrade=true`，Spot账户、订单、成交和`spot.newOrder`工具均可见。但当前Codex MCP宿主的工具约束明确要求：执行任何非GET操作前必须向用户确认。因此这个宿主可以持续读取，不能直接满足`AUTO-002`的无人值守写操作。
+- 现有 `binance-agent-os` MCP 连接、Agentic Spot 账户读取、七项只读核对和完整分页已经验证。
+- 历史上已通过该宿主完成约 10 USDT BTC 买入；当前代码仍需完成策略到逐笔确认 MCP 订单的持续编排验收。
+- Binance 官方说明 Agentic MCP 不把 API Key 放在设备上，并要求每一笔交易、撤单或划转先确认。
+- 剩余工作严格遵循[收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)的 Phase 1 至 Phase 5。
 
-Read-only verification on 2026-09-22 confirmed that the existing `binance-agent-os` connection is active, the Agentic Spot account reports `canTrade=true`, and account/order/fill/`spot.newOrder` tools are visible. However, the current Codex MCP host explicitly requires user confirmation before every non-GET operation. It can support sustained reads but cannot directly satisfy unattended write criterion `AUTO-002`.
+- The existing `binance-agent-os` connection, Agentic Spot reads, seven-part read preflight, and complete pagination have been verified.
+- The host previously completed an approximately 10-USDT BTC buy; current code still needs sustained strategy-to-confirmed-MCP-order orchestration acceptance.
+- Binance documents that Agentic MCP keeps API keys off-device and requires confirmation before every trade, cancel, or transfer.
+- Remaining work follows Phases 1 through 5 of the [closeout master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md).
 
-用户已批准单独实现Binance Spot API自动执行路线。这个API凭据绑定的是签发它的交易所账户，**不能假定就是原来有资金的Agentic子账户**；首次运行前必须核验具体账户、权限、余额和资金归属。现有MCP授权和资金不作迁移、不自动回退。代码阶段的离线测试不等于实盘授权或24小时验收。
-
-The operator approved a separate Binance Spot API execution route. API credentials bind to the exchange account that issued them; **they must not be assumed to access the previously funded Agentic subaccount**. Verify account, permissions, balance and funding before any live run. Existing MCP authorization and funds are not migrated or used as an automatic fallback. Offline code tests are not live authorization or 24-hour acceptance.
+官方资料 / Official source: <https://developers.binance.com/en/docs/agent-native/mcp-server/agentic>
 
 ## 变更纪律 / Change control
 
-- 每个后续提交必须注明关闭的`AUTO-xxx`；没有对应项的功能不进入收尾分支；
-- 不新增策略、UI美化、多币种、Futures、Telegram或逐笔确认功能；
-- CI必须包含“一次启动、多次自动信号、零确认回调”的端到端假宿主测试；
-- 每轮报告只回答：关闭了哪个验收项、还剩哪个阻塞、是否更接近24小时闭环。
+- 每个后续提交必须注明关闭的 `MCP-AUTO-xxx`；没有对应项的功能不进入收尾。
+- “继续”“可以”“按计划”只授权既定路线，不授权更换账户、认证或执行接口。
+- 任何 MCP/API/Wallet/OAuth/账户路线变化必须先形成决策记录，并取得用户明确批准。
+- 不新增策略、UI 美化、多标的、Futures 或 Telegram；只完成最小必要界面和主闭环。
+- 每轮报告必须说明验收 ID、测试证据、剩余阻塞和下一阶段。
 
-- Every remaining commit must name the `AUTO-xxx` criterion it closes;
-- no new strategy, UI polish, multi-symbol, Futures, Telegram or per-order-confirmation work;
-- CI must exercise one start, multiple automatic signals and zero confirmation callbacks against a fake host;
-- every progress report states only which criterion closed, the remaining blocker, and progress toward the 24-hour loop.
+- Every remaining commit names the `MCP-AUTO-xxx` criterion it closes; unrelated work does not enter closeout.
+- “Continue”, “okay”, and “follow the plan” authorize only the established path, not an account, authentication, or transport change.
+- Any MCP/API/Wallet/OAuth/account change requires a decision record and explicit operator approval first.
+- No new strategy, UI polish, multi-symbol, Futures, or Telegram work; only the minimum UI and core loop are in scope.
+- Every progress report states the acceptance IDs, test evidence, remaining blocker, and next phase.

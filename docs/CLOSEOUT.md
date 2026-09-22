@@ -1,53 +1,55 @@
-# 当前收尾状态 / Current closeout status
+# 当前收尾状态 / Current Closeout Status
 
-产品收尾目标和验收优先服从[自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)。逐笔确认、票据和桌面演练是诊断安全组件，不是最终业务流程。
+收尾范围服从[自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[MCP + Agentic 收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)。当前唯一真实交易主链是：现有 Codex Binance MCP 宿主 → 现有 Agentic 子账户。每个真实非只读动作按照 Binance Agentic MCP 规则逐笔确认。
 
-Closeout is governed by the [Autonomous Trading Product Baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md). Per-order confirmation, tickets and desktop rehearsal are diagnostic safety components, not the final product flow.
+Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md). The only real-trading path is the existing Codex Binance MCP host to the existing Agentic sub-account. Every real non-read action is confirmed individually under the Binance Agentic MCP contract.
 
 ## 已完成 / Delivered
 
-- 统一策略注册表和Spot/Web3/Futures适用标签；MTF、Median和Range家族共用接口，Slope未加入。
-- 公共行情、历史下载/聚合/回放、桌面模拟盘、K线展示、参数编辑和持久化。
-- 默认单笔100、累计亏损10停买、卖出继续等待策略信号、手动恢复等本地风控。
-- Spot成交账本、权益风险、执行互斥、确定性客户端订单ID和UNKNOWN只查单恢复。
-- 现有Codex Binance MCP宿主的无凭据读取请求与订单计划交接。
-- 脱敏宿主回执、显式首次账户指纹登记、后续账户漂移拒绝和桌面导入。
-- 新回执格式已对既有Agentic账户完成一次真实BTCUSDT只读闭环；7项读取、完整分页、脱敏和严格导入均通过。
-- 已读取并验证真实`spot.newOrder/spot.getOrder` schema；修复JSON number金额适配和条件查询字段兼容，未调用写工具。
-- 订单候选计划升级为严格schema v3：绑定已登记账户和稳定信号指纹，不能直接提交；确认后先原子写入SUBMITTING，再生成最多15秒的单次提交票据。
-- 新增严格终态/UNKNOWN执行回执：终态必须完成查单和7项只读刷新、完整分页及订单/成交/余额交叉核对；先幂等同步成交账本，再推进执行日志。
-- Agentic Wallet作为彼此独立的BSC执行通道，不作为MCP失败时的自动回退。
+- 统一策略注册表和 Spot/Web3/Futures 适用标签；MTF、Median 和 Range 家族共用接口，Slope 未加入。
+- 公共行情、历史下载/聚合/回放、桌面模拟盘、K 线展示、参数编辑和持久化。
+- 默认单次 100 USDT、累计亏损 10 USDT 停买、SELL 信号继续和手动恢复等本地风控。
+- Spot 成交账本、权益风险、执行互斥、确定性客户端订单 ID 和 `UNKNOWN` 只查单恢复。
+- 现有 Codex Binance MCP 宿主的无凭据读取请求、订单候选计划和严格宿主回执。
+- 既有 Agentic 子账户完成一次真实 BTCUSDT 七项只读闭环、完整分页、脱敏和严格导入。
+- 真实 `spot.newOrder`/`spot.getOrder` schema 已读取验证，没有在该次验收调用写工具。
+- 候选计划、逐笔确认、短时一次性提交票据、终态/UNKNOWN 回执和账本优先导入已完成离线验收。
+- Agentic Wallet 保持独立 BSC 通道，绝不作为 MCP 失败回退。
 
-- Unified strategy registry with Spot/Web3/Futures tags; MTF, Median and Range share one interface, with Slope excluded.
-- Public data, history/aggregation/replay, desktop paper trading, candles, editable settings and persistence.
-- Local controls including 100-unit entries, cumulative-loss 10 BUY latch, strategy-led exits and manual resume.
-- Spot ledger/equity risk, execution lock, deterministic client IDs and lookup-only UNKNOWN recovery.
-- Credential-free handoff to the existing Codex Binance MCP host.
-- Sanitized host receipts, explicit first fingerprint enrollment, account-drift rejection and desktop import.
-- The new receipt format completed one live BTCUSDT read loop against the existing Agentic account; all seven reads, complete pagination, sanitization and strict import passed.
-- Live `spot.newOrder/spot.getOrder` schemas were read and validated; JSON-number amount adaptation and conditional lookup compatibility were fixed without invoking a write tool.
-- Candidate plans now use strict schema v3, bind the enrolled account plus a stable signal fingerprint, and cannot be submitted directly; confirmation durably enters SUBMITTING before a ≤15-second one-shot ticket is emitted.
-- Strict terminal/UNKNOWN execution receipts now require lookup plus all seven read refreshes, complete pagination and order/fill/balance cross-reconciliation; the fill ledger is synchronized idempotently before the execution journal advances.
-- Agentic Wallet remains an independent BSC transport, never an automatic MCP fallback.
+- Unified strategy registry with Spot/Web3/Futures tags; MTF, Median, and Range share one interface, with Slope excluded.
+- Public market data, history/aggregation/replay, desktop paper trading, candles, editable settings, and persistence.
+- Local risk controls: default 100-USDT entries, 10-USDT cumulative-loss BUY latch, continued SELL signals, and manual resume.
+- Spot fill ledger, equity risk, execution lock, deterministic client order IDs, and lookup-only `UNKNOWN` recovery.
+- Credential-free read requests, candidate order plans, and strict host receipts for the existing Codex Binance MCP host.
+- One live seven-part BTCUSDT read loop against the existing Agentic sub-account, with complete pagination, sanitization, and strict import.
+- Live `spot.newOrder`/`spot.getOrder` schemas were validated without calling a write tool in that acceptance run.
+- Candidate, per-order confirmation, expiring one-shot ticket, terminal/UNKNOWN receipt, and ledger-first import flows passed offline acceptance.
+- Agentic Wallet remains an independent BSC route and never serves as MCP fallback.
 
 ## 已纠正 / Corrected
 
-此前误把桌面程序设计成新的Binance OAuth Agent。真实授权证明Binance不支持该自建Agent身份，而现有Codex MCP宿主早已成功连接并使用Agentic账户。错误的OAuth、回调监听、Client Metadata、Pages和直接HTTP入口均已撤下；这次纠正没有访问账户或提交订单。详见[MCP宿主桥接](MCP_HOST_BRIDGE.md)。
+1. 自建 Binance OAuth Agent 路线此前已撤回；本地程序不会重新登录、监听回调或持久化 MCP Token。
+2. 独立 Binance Spot API 自动下单原型被错误描述为已获批准。该路线现已从产品入口、文档和当前源码中撤回；不创建或使用 API Key。
+3. 原“零确认真实写入”验收与 Binance Agentic MCP 官方规则冲突，已改为持续自动监测/决策/风控，加逐笔真实写操作确认。
 
-The desktop was previously and incorrectly treated as a new Binance OAuth Agent. Live authorization showed that identity was unsupported, while the existing Codex MCP host had already connected to and used the Agentic account. OAuth/callback/client-metadata/Pages/direct-HTTP entry points were removed. This correction accessed no account and placed no order. See [MCP host bridge](MCP_HOST_BRIDGE.md).
+1. The custom Binance OAuth Agent path was already removed; the local application does not reauthenticate, listen for callbacks, or persist MCP tokens.
+2. A separate Binance Spot API auto-order prototype was incorrectly represented as approved. It is removed from product entry points, active documentation, and current source; no API key is created or used.
+3. The old zero-confirmation write criterion conflicts with the official Binance Agentic MCP contract. Acceptance now covers continuous market/strategy/risk automation plus per-action confirmation for real writes.
 
-## 尚待验收 / Remaining acceptance
+## 尚待完成 / Remaining
 
-1. 已选独立Binance Spot API路线；当前Codex MCP宿主仍要求非GET操作逐笔确认，且API账户不等同于已有Agentic账户。
-2. API自动执行、会话状态、完整对账与MTF信号的离线闭环及常驻故障注入已实现；还需实际运行只读UID预检、真实小额验收。
-3. 单标的24小时小额实盘、断线和恢复验收；Median/Range真实信号源仍未接到API常驻命令。
-4. 多币种、Futures和其他外围功能不属于本次收尾阻塞项。
+1. `MCP-AUTO-001/004/005/007/008`：持久化单标的策略/风控会话和故障恢复闭环。
+2. `MCP-AUTO-002/003/006`：把策略候选、桌面弹窗、宿主七项预检、当笔确认、MCP 提交、终态和账本串成持续闭环。
+3. `MCP-AUTO-009`：完成一笔经确认的策略 BUY、一笔经确认的策略 SELL，以及 24 小时小额监督运行。
+4. `MCP-AUTO-010`：保持 MCP-only 架构守卫持续通过。
+5. 多标的、Futures、Telegram 和其他外围功能不属于本次收尾阻塞项。
 
-1. A separate Binance Spot API route is approved; the current Codex MCP host still requires per-write confirmation, and an API account is not the existing Agentic account by assumption.
-2. Offline API execution, durable session, full reconciliation, MTF signal loop and service fault injection exist; actual read-only UID preflight and small live acceptance remain.
-3. Pass a 24-hour small single-symbol live, disconnect and recovery acceptance run; Median/Range live signal feeds are not yet wired to the API service.
-4. Multi-symbol, Futures and other peripheral work do not block this closeout.
+1. `MCP-AUTO-001/004/005/007/008`: durable single-symbol strategy/risk session and recovery loop.
+2. `MCP-AUTO-002/003/006`: connect strategy candidates, desktop alerts, seven-part host preflight, per-action confirmation, MCP submission, terminal state, and ledger reconciliation.
+3. `MCP-AUTO-009`: one confirmed strategy BUY, one confirmed strategy SELL, and a 24-hour supervised small-balance run.
+4. `MCP-AUTO-010`: keep the MCP-only architecture guard passing.
+5. Multi-symbol, Futures, Telegram, and peripheral work do not block this closeout.
 
-用户已明确批准API路线的本地实现，但没有要求本轮创建密钥、转移资产或提交真实订单。详见[API常驻路线](AUTONOMOUS_SPOT_API_CLOSEOUT.md)。
+所有真实账户动作都必须在执行当笔单独确认；总体计划批准不等于订单批准。
 
-The operator explicitly approved local implementation of the API route, but did not request credential creation, asset movement or live orders in this work round. See the [API service closeout](AUTONOMOUS_SPOT_API_CLOSEOUT.md).
+Every real-account action requires a separate confirmation at execution time; approval of the overall plan is not approval of an order.
