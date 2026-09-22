@@ -6,17 +6,17 @@
 
 ## 唯一主目标 / Single primary objective
 
-用户选择单一标的、统一策略和风险参数，发出一次启动命令。此后程序持续获取行情、产生策略信号、核对真实Agentic Spot账户、自动买入或卖出、查询订单终态并更新账本，直到用户发出结束命令。
+用户选择单一标的、统一策略和风险参数，发出一次启动命令。此后程序持续获取行情、产生策略信号、核对绑定的Spot账户、自动买入或卖出、查询订单终态并更新账本，直到用户发出结束命令。原目标优先使用Agentic账户；当前MCP宿主不支持无人值守写操作后，经用户明确批准，另建独立API账户路线，不得假称二者是同一账户。
 
-The operator selects one symbol, a registered strategy and risk settings, then issues one start command. The process continuously reads market data, evaluates signals, reconciles the real Agentic Spot account, buys or sells automatically, resolves terminal order state and updates its ledger until the operator issues stop.
+The operator selects one symbol, a registered strategy and risk settings, then issues one start command. The process continuously reads market data, evaluates signals, reconciles the bound Spot account, buys or sells automatically, resolves terminal order state and updates its ledger until the operator issues stop. The original preference is the Agentic account; after the current MCP host proved unsuitable for unattended writes, the operator separately approved an independent API-account route. These accounts must never be represented as identical without verification.
 
-逐笔人工确认不是主产品流程，只允许作为诊断和最小金额验收模式。启动授权必须绑定当前Agentic账户指纹、单一标的、策略配置和风险配置；它不是无限账户授权。
+逐笔人工确认不是主产品流程，只允许作为诊断和最小金额验收模式。启动授权必须绑定实际执行账户指纹、单一标的、策略配置和风险配置；它不是无限账户授权。
 
-Per-order confirmation is diagnostic/minimum-size acceptance mode only, not the product path. The start authorization is bound to the enrolled Agentic account fingerprint, one symbol, strategy configuration and risk configuration; it is not unrestricted account authority.
+Per-order confirmation is diagnostic/minimum-size acceptance mode only, not the product path. The start authorization is bound to the actual execution account fingerprint, one symbol, strategy configuration and risk configuration; it is not unrestricted account authority.
 
 ## 已确定的MVP范围 / Fixed MVP scope
 
-- Binance Spot；MCP优先，不自动回退到API或Agentic Wallet；
+- Binance Spot；MCP优先。2026-09-22用户已明确批准单独实现API自动执行路线；仍不自动在MCP、API或Agentic Wallet之间切换；
 - 单标的、单策略、单持仓；多币种和Futures不阻塞MVP；
 - 默认单笔预算100 USDT，累计权益亏损10 USDT后锁定新买入；
 - 最大持仓成本、每日开仓次数、连亏次数和开仓冷却继续使用现有风控；
@@ -26,7 +26,7 @@ Per-order confirmation is diagnostic/minimum-size acceptance mode only, not the 
 - 网络故障自动退避重连；订单结果不确定时只按确定性客户端订单ID查单，绝不重发；
 - 意外进程重启进入安全恢复状态，不自动新开仓；用户明确恢复后继续。
 
-- Binance Spot; MCP first, with no silent API or Agentic Wallet fallback;
+- Binance Spot; MCP first. On 2026-09-22 the operator explicitly approved a separate API-backed autonomous route; there is still no silent MCP/API/Agentic Wallet fallback;
 - one symbol, one strategy and one position; multi-symbol and Futures do not block MVP;
 - default 100-USDT order budget and a 10-USDT cumulative equity-loss BUY latch;
 - retain the existing position-cost, daily-entry, losing-streak and cooldown controls;
@@ -67,15 +67,15 @@ STOPPED --用户启动--> STARTING --核对通过--> RUNNING
 任何不确定订单 -> RECOVERY_ONLY -> 只读查单/对账 -> 原状态或人工处理
 ```
 
-## 当前唯一阻塞 / Current single blocker
+## 当前执行通道决定与剩余验收 / Transport decision and remaining acceptance
 
 2026-09-22只读核验确认：现有`binance-agent-os` MCP连接仍然有效，Agentic Spot账户`canTrade=true`，Spot账户、订单、成交和`spot.newOrder`工具均可见。但当前Codex MCP宿主的工具约束明确要求：执行任何非GET操作前必须向用户确认。因此这个宿主可以持续读取，不能直接满足`AUTO-002`的无人值守写操作。
 
 Read-only verification on 2026-09-22 confirmed that the existing `binance-agent-os` connection is active, the Agentic Spot account reports `canTrade=true`, and account/order/fill/`spot.newOrder` tools are visible. However, the current Codex MCP host explicitly requires user confirmation before every non-GET operation. It can support sustained reads but cannot directly satisfy unattended write criterion `AUTO-002`.
 
-下一步只允许进行执行通道决策：验证是否存在Binance支持的、可使用现有Agentic授权并允许会话级自动交易的长期Agent宿主。若不存在，按用户既定要求停止并讨论是否批准Binance API；不得继续用逐笔确认功能冒充自动交易收尾。
+用户已批准单独实现Binance Spot API自动执行路线。这个API凭据绑定的是签发它的交易所账户，**不能假定就是原来有资金的Agentic子账户**；首次运行前必须核验具体账户、权限、余额和资金归属。现有MCP授权和资金不作迁移、不自动回退。代码阶段的离线测试不等于实盘授权或24小时验收。
 
-The only next decision is execution transport: determine whether a Binance-supported long-running Agent host can use the existing Agentic authorization with session-level automatic trading. If none exists, stop and discuss explicit Binance API approval. Per-order confirmation work must not be presented as autonomous-trading completion.
+The operator approved a separate Binance Spot API execution route. API credentials bind to the exchange account that issued them; **they must not be assumed to access the previously funded Agentic subaccount**. Verify account, permissions, balance and funding before any live run. Existing MCP authorization and funds are not migrated or used as an automatic fallback. Offline code tests are not live authorization or 24-hour acceptance.
 
 ## 变更纪律 / Change control
 

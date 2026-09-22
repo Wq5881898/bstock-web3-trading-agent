@@ -38,16 +38,16 @@ The desktop was previously and incorrectly treated as a new Binance OAuth Agent.
 
 ## 尚待验收 / Remaining acceptance
 
-1. 决定满足`AUTO-002`的长期执行宿主；当前Codex MCP宿主要求非GET操作逐笔确认。
-2. 一次启动后的策略信号、风控、自动下单/平仓、终态和账本回写闭环。
-3. 单标的24小时小额实盘、断线和恢复验收。
+1. 已选独立Binance Spot API路线；当前Codex MCP宿主仍要求非GET操作逐笔确认，且API账户不等同于已有Agentic账户。
+2. API自动执行、会话状态、完整对账与MTF信号的离线闭环已实现；需完成账户归属核验、常驻进程故障注入与真实小额验收。
+3. 单标的24小时小额实盘、断线和恢复验收；Median/Range真实信号源仍未接到API常驻命令。
 4. 多币种、Futures和其他外围功能不属于本次收尾阻塞项。
 
-1. Select a long-running execution host that can satisfy `AUTO-002`; the current Codex MCP host requires confirmation before non-GET operations.
-2. Complete the once-started signal/risk/automatic entry-exit/terminal/ledger loop.
-3. Pass a 24-hour small single-symbol live, disconnect and recovery acceptance run.
+1. A separate Binance Spot API route is approved; the current Codex MCP host still requires per-write confirmation, and an API account is not the existing Agentic account by assumption.
+2. Offline API execution, durable session, full reconciliation and MTF signal loop exist; account ownership checks, service fault injection and a small live acceptance remain.
+3. Pass a 24-hour small single-symbol live, disconnect and recovery acceptance run; Median/Range live signal feeds are not yet wired to the API service.
 4. Multi-symbol, Futures and other peripheral work do not block this closeout.
 
-API Key路线不在当前授权范围。若MCP无法满足`AUTO-002`，必须停止并先讨论、取得用户明确允许；不能把产品目标降级为逐笔确认。
+用户已明确批准API路线的本地实现，但没有要求本轮创建密钥、转移资产或提交真实订单。详见[API常驻路线](AUTONOMOUS_SPOT_API_CLOSEOUT.md)。
 
-The API-key route remains unauthorized. If MCP cannot satisfy `AUTO-002`, stop and obtain explicit approval before proceeding; do not downgrade the product to per-order confirmation.
+The operator explicitly approved local implementation of the API route, but did not request credential creation, asset movement or live orders in this work round. See the [API service closeout](AUTONOMOUS_SPOT_API_CLOSEOUT.md).

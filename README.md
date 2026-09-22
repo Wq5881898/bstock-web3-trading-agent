@@ -8,17 +8,18 @@
 **Binance Agent OS Mini Hackathon — Track A** 构建。
 
 项目将 Binance bStock 市场数据转换为本地 1 分钟/5 分钟 EMA 交易信号，支持确定性历史回放、
-模拟盘监控，并可把经过用户确认的订单路由到两条彼此独立的执行通道：
+模拟盘监控，并提供彼此独立、绝不自动切换的执行通道：
 
 - **Binance Agent OS MCP**：通过现有、已授权的Codex MCP宿主访问其所选Agentic子账户。
 - **Binance Agentic Wallet (`baw`)**：在 BSC 上执行 bStock 报价和链上交易。
+- **Binance Spot API**：显式启动的单标的MTF常驻自动执行原型；与已有Agentic子账户并不自动共享资金或身份。
 
-本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认模式为模拟盘，
-不会自动调用 MCP、钱包或执行真实交易。
+本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认桌面模式为模拟盘，
+不会自动调用 MCP、钱包或执行真实交易；独立`bstock-auto`命令需要显式选择测试网或生产网。
 
 最终产品目标是：用户一次启动后，由选定策略在绑定的Agentic Spot账户中持续自动交易，直到用户结束；逐笔确认只属于诊断/最小金额验收模式。范围、状态机、验收条件及当前MCP宿主阻塞以[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)为最高优先级依据。
 
-The final product goal is a once-started, strategy-driven autonomous session on the bound Agentic Spot account, running until the operator stops it. Per-order confirmation is diagnostic/minimum-size acceptance mode only. The [Autonomous Trading Product Baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) is the highest-priority source for scope, lifecycle, acceptance and the current MCP-host blocker.
+The final product goal is a once-started, strategy-driven autonomous session running until the operator stops it. Per-order confirmation is diagnostic only. The current [Spot API service prototype](docs/AUTONOMOUS_SPOT_API_CLOSEOUT.md) is separate from the funded Agentic account and has not passed live acceptance. The [Autonomous Trading Product Baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) remains the highest-priority product source.
 
 ## 核心功能 / Key Features
 
@@ -56,6 +57,7 @@ it is **not an unattended live-trading release**.
 
 | 模块 / Module | 新增能力 / Added capabilities | 状态 / Status |
 | --- | --- | --- |
+| Spot API常驻原型 / Spot API service prototype | 单次启动、MTF自动BUY/SELL、全量成交对账、UNKNOWN只查单、stop/resume控制 / One start, automatic MTF BUY/SELL, complete fill reconciliation, lookup-only UNKNOWN, stop/resume controls | 离线测试通过；未核验真实API账户或24小时实盘 / Offline tests pass; live account and 24-hour run unverified |
 | 桌面监控 / Desktop | 后台单线程评估、等待安全停止、状态窗口互斥、非阻塞风控弹窗、模拟账户及逐笔策略最近100笔成交 / Single-worker evaluation, safe-stop waiting, per-state locking, nonmodal alerts, paper account and latest 100 tick-strategy fills | 可用 / Available |
 | K线页 / Candles | 1m/5m已收盘K线、UTC时间、失败后历史数据标记 / Closed 1m/5m candles, UTC timestamps and historical-data markers after failures | 可用 / Available |
 | 模拟风控 / Paper risk | 日累计净值亏损、连亏次数、每日开仓次数、冷却和持仓成本上限 / Daily equity loss, loss streak, daily entries, cooldown and position cost cap | MTF、Median、Range模拟可用 / Available in MTF, Median and Range paper modes |
