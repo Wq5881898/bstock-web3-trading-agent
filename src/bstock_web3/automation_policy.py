@@ -1,4 +1,4 @@
-"""Venue-neutral unattended-execution policy; contains no order transport.
+"""Venue-neutral automated risk policy; contains no order transport.
 
 The policy consumes an account snapshot that an MCP/venue adapter has already
 reconciled. It can authorize an intent, but it cannot submit one by itself.
@@ -157,6 +157,16 @@ class AutomationPolicy:
             self.buy_pause_reason = reason.strip()
             self.latched_at_ms = now_ms
         return transitioned
+
+    def observe(self, snapshot: AccountRiskSnapshot, *, now_ms: int) -> bool:
+        """Apply risk latches to a fresh reconciled read without an order intent."""
+        if not isinstance(snapshot, AccountRiskSnapshot):
+            raise ValueError("Invalid account risk snapshot")
+        self._validate_now(now_ms)
+        reasons = self._snapshot_health(snapshot, now_ms)
+        if reasons:
+            raise ValueError("Unsafe account snapshot: " + ",".join(reasons))
+        return self._observe_buy_risk(snapshot, now_ms)
 
     def request_manual_resume(self, snapshot: AccountRiskSnapshot,
                               *, now_ms: int) -> AutomationDecision:

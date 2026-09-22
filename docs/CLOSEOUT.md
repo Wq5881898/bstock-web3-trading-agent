@@ -38,13 +38,13 @@ Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) 
 
 ## 尚待完成 / Remaining
 
-1. `MCP-AUTO-001/004/005/007/008`：持久化单标的策略/风控会话和故障恢复闭环。
+1. `MCP-AUTO-001/004/005/007/008` 的持久化候选会话和故障注入已经通过离线验收。
 2. `MCP-AUTO-002/003/006`：把策略候选、桌面弹窗、宿主七项预检、当笔确认、MCP 提交、终态和账本串成持续闭环。
 3. `MCP-AUTO-009`：完成一笔经确认的策略 BUY、一笔经确认的策略 SELL，以及 24 小时小额监督运行。
 4. `MCP-AUTO-010`：保持 MCP-only 架构守卫持续通过。
 5. 多标的、Futures、Telegram 和其他外围功能不属于本次收尾阻塞项。
 
-1. `MCP-AUTO-001/004/005/007/008`: durable single-symbol strategy/risk session and recovery loop.
+1. The durable candidate session and fault injection for `MCP-AUTO-001/004/005/007/008` pass offline acceptance.
 2. `MCP-AUTO-002/003/006`: connect strategy candidates, desktop alerts, seven-part host preflight, per-action confirmation, MCP submission, terminal state, and ledger reconciliation.
 3. `MCP-AUTO-009`: one confirmed strategy BUY, one confirmed strategy SELL, and a 24-hour supervised small-balance run.
 4. `MCP-AUTO-010`: keep the MCP-only architecture guard passing.
