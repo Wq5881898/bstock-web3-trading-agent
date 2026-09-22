@@ -64,7 +64,7 @@ it is **not an unattended live-trading release**.
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
 | MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；宿主网络接线待完成 / Strict import and recovery accepted offline; host network wiring pending |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
-| 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
+| 桌面逐笔确认 / Desktop per-order confirmation | 已核验回执+候选计划的只读演练、账户/方向/精确金额、一次性短语、15秒过期、不可提交报告 / Read-only rehearsal from a verified receipt plus candidate, exact account/side/amount, one-time phrase, 15-second expiry and non-dispatchable report | [界面演练已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / UI rehearsal accepted offline; live submission remains disabled |
 | Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
 | Spot成交账本 / Spot fill ledger | 成交ID幂等、基础/报价手续费、移动平均成本、已实现盈亏、锁与原子检查点 / Idempotent fills, base/quote fees, average cost, realized PnL and locked atomic checkpoints | [离线模块](docs/SPOT_FILL_LEDGER.md)；真实宿主接线未完成 / Offline module; live-host wiring pending |
 | Spot权益风险 / Spot equity risk | UTC基准、买一价估值、资金流调整，以及成交推导的开仓/连亏计数 / UTC baselines, best-bid valuation, cash-flow adjustment and fill-derived entry/loss counters | [离线模块](docs/SPOT_EQUITY_RISK.md)；完整资金流水源和桌面编排未完成 / Offline module; complete cash-flow source and desktop orchestration pending |
@@ -92,8 +92,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**442项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **442 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：以当前CI结果为准。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: see the current CI result. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -207,8 +207,9 @@ bstock-desktop
 窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”和“账户 / Account”。可选择MTF EMA、逐笔Median或固定/防御/Auto/Adaptive Range，检查金额与风控后启动。各逐笔策略使用独立模拟资金；GUI没有真实下单开关。<br>
 The window has Monitor, Candles, Strategies and Account tabs. Select default/custom MTF EMA,
 tick Median, or fixed/guarded/Auto/Adaptive Range, review budget/risk inputs, then start.
-Each tick strategy uses separate simulated funds; the Account tab exports a Codex MCP
-read request and the GUI has no live-order switch or OAuth login.
+Each tick strategy uses separate simulated funds. The Account tab exports/imports the
+Codex MCP read boundary and can run a dispatch-prohibited candidate rehearsal; the GUI
+has no live-order switch, `spot.newOrder` call or OAuth login.
 
 本地合成桌面验收（不连接账户，结果保存在被Git忽略的`runtime/`目录）：<br>
 Local synthetic desktop acceptance (no account connection; output stays in git-ignored `runtime/`):

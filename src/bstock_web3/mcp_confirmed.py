@@ -148,6 +148,18 @@ class ConfirmedSubmission:
     prepared_at_ms: int
 
 
+@dataclass(frozen=True)
+class ConfirmedRehearsal:
+    """Consumed confirmation that is deliberately not externally dispatchable."""
+
+    fingerprint: str
+    client_order_id: str
+    account_ref: str
+    symbol: str
+    arguments: dict
+    confirmed_at_ms: int
+
+
 class ConfirmedSpotExecutor:
     """Single-host executor; every submit consumes one exact confirmation.
 
@@ -202,6 +214,29 @@ class ConfirmedSpotExecutor:
     def begin_submission(self, confirmation, evidence: McpReconciliationEvidence,
                          *, now_ms):
         """Consume confirmation and durably enter SUBMITTING before host I/O."""
+        record, args = self._consume_confirmation(
+            confirmation, evidence, now_ms=now_ms)
+        self.journal.transition(record.fingerprint, ExecutionPhase.SUBMITTING, now_ms=now_ms)
+        return ConfirmedSubmission(record.fingerprint, record.client_order_id,
+                                   record.account_ref, record.symbol,
+                                   dict(args), now_ms)
+
+    def rehearse_confirmation(self, confirmation,
+                               evidence: McpReconciliationEvidence, *, now_ms):
+        """Consume and revalidate a confirmation without arming host submission.
+
+        The durable record intentionally remains PREPARED.  The returned value
+        is a separate type and cannot be passed to the submission-ticket
+        builder, preventing a desktop rehearsal from becoming a live order.
+        """
+        record, args = self._consume_confirmation(
+            confirmation, evidence, now_ms=now_ms)
+        return ConfirmedRehearsal(record.fingerprint, record.client_order_id,
+                                  record.account_ref, record.symbol,
+                                  dict(args), now_ms)
+
+    def _consume_confirmation(self, confirmation,
+                              evidence: McpReconciliationEvidence, *, now_ms):
         if self._pending is None:
             raise RuntimeError("No confirmation pending")
         intent, previous, rules, record, args, expected, created = self._pending
@@ -224,10 +259,7 @@ class ConfirmedSpotExecutor:
             raise RuntimeError("Confirmed order amount changed")
         if self.journal.get(record.fingerprint).phase != ExecutionPhase.PREPARED:
             raise RuntimeError("Execution no longer prepared")
-        self.journal.transition(record.fingerprint, ExecutionPhase.SUBMITTING, now_ms=now_ms)
-        return ConfirmedSubmission(record.fingerprint, record.client_order_id,
-                                   record.account_ref, record.symbol,
-                                   dict(args), now_ms)
+        return record, args
 
     def accept_submission_result(self, fingerprint, payload, *, now_ms):
         """Validate a host result and advance the durable execution journal."""

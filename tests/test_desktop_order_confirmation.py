@@ -1,6 +1,10 @@
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen")
 
+from pathlib import Path
+from types import SimpleNamespace
+import time
+
 import pytest
 
 pytest.importorskip("PyQt5")
@@ -91,3 +95,48 @@ def test_monitor_owns_and_cancels_prompt(monkeypatch, tmp_path):
     window.close(); app.processEvents()
     assert calls == ["cancel"]
     assert not window.order_prompts
+
+
+def test_account_tab_runs_only_injected_non_dispatchable_rehearsal(
+        monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    app = QtWidgets.QApplication.instance()
+    events = []
+    receipt = object()
+    summary = {"accountRef":"agentic-primary", "symbol":"BTCUSDT",
+        "canTrade":True, "availableQuote":"100", "positionQuantity":"0",
+        "positionCost":"0", "pendingOrderId":None,
+        "observedAt":"2026-09-21T12:00:10Z"}
+
+    live_preview = preview(expiresAtMs=int(time.time() * 1000) + 15_000)
+    class Session:
+        preview = live_preview
+        def confirm(self, phrase):
+            events.append(("confirm", phrase))
+            return Path("rehearsal.json"), SimpleNamespace(
+                symbol="BTCUSDT", side="BUY")
+        def cancel(self):
+            events.append(("cancel",))
+
+    def importer(symbol):
+        return tmp_path / "verified.json", summary, receipt
+    def loader(symbol, verified, loss):
+        events.append(("load", symbol, verified, str(loss)))
+        return Session()
+
+    window = create_monitor_class(lambda config: None, None, importer, loader)()
+    window.show()
+    try:
+        window.mcp_import.click()
+        assert window.mcp_rehearse.isEnabled()
+        window.mcp_rehearse.click(); app.processEvents()
+        assert events[0] == ("load", "BTCUSDT", receipt, "0.0")
+        dialog = window.order_prompts[0]
+        dialog.input.setText(Session.preview["confirmation"])
+        dialog.confirm_button.click(); app.processEvents()
+        assert events[1] == ("confirm", Session.preview["confirmation"])
+        assert "dispatch_prohibited=true" in window.mcp_status.text()
+        assert "no MCP call occurred" in window.mcp_status.text()
+        assert window.mcp_rehearsal_session is None
+    finally:
+        window.close()

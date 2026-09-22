@@ -62,6 +62,18 @@ def mcp_receipt_file(symbol: str) -> Path:
     return request.with_name(f"{symbol.strip().lower()}-host-receipt.json")
 
 
+def mcp_plan_file(symbol: str) -> Path:
+    # Match the CLI default in a source checkout.  Packaged builds keep the
+    # candidate beside the other credential-free MCP artifacts.
+    normalized = symbol.strip().lower()
+    if not re.fullmatch(r"[a-z0-9]{1,32}", normalized):
+        raise ValueError("Invalid MCP Spot symbol")
+    source_root = Path(__file__).resolve().parents[2]
+    if (source_root / "pyproject.toml").is_file():
+        return source_root / "runtime" / "mcp" / "latest-order-plan.json"
+    return mcp_request_file(symbol).parent / "latest-order-plan.json"
+
+
 def import_mcp_host_receipt(symbol: str):
     from .mcp_bridge import (load_mcp_account_binding,
                              load_mcp_read_request)
@@ -77,11 +89,11 @@ def import_mcp_host_receipt(symbol: str):
     verified_path = request_path.parent / \
         f"{symbol.strip().lower()}-verified-snapshot.json"
     write_verified_receipt(receipt, verified_path)
-    return verified_path, receipt.summary()
+    return verified_path, receipt.summary(), receipt
 
 
 def create_monitor_class(engine_factory=None, bridge_writer=None,
-                         receipt_importer=None):
+                         receipt_importer=None, rehearsal_loader=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
@@ -104,6 +116,12 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             return path, request
     if receipt_importer is None:
         receipt_importer = import_mcp_host_receipt
+    if rehearsal_loader is None:
+        from .mcp_desktop_rehearsal import prepare_desktop_rehearsal
+        def rehearsal_loader(symbol, receipt, daily_equity_loss):
+            return prepare_desktop_rehearsal(
+                mcp_plan_file(symbol), receipt, mcp_request_file(symbol).parent,
+                daily_equity_loss=daily_equity_loss)
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -115,6 +133,8 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             self._last_risk = ""
             self.alerts = []
             self.order_prompts = []
+            self.mcp_verified_receipt = None
+            self.mcp_rehearsal_session = None
             self.result_timer = QtCore.QTimer(self)
             self.result_timer.timeout.connect(self.collect)
             self.result_timer.start(100)
@@ -340,10 +360,24 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             self.mcp_import = QtWidgets.QPushButton(
                 "导入Codex回执 / Import Codex receipt")
             self.mcp_import.clicked.connect(self.import_mcp_receipt)
+            self.mcp_rehearse = QtWidgets.QPushButton(
+                "载入候选并演练 / Load candidate rehearsal")
+            self.mcp_rehearse.setEnabled(False)
+            self.mcp_rehearse.clicked.connect(self.load_mcp_rehearsal)
+            self.mcp_rehearsal_loss = QtWidgets.QDoubleSpinBox()
+            self.mcp_rehearsal_loss.setRange(0, 100000)
+            self.mcp_rehearsal_loss.setDecimals(8)
+            self.mcp_rehearsal_loss.setValue(0)
+            self.mcp_rehearsal_loss.setToolTip(
+                "仅供本地演练风控，不会写入真实提交票据 / Local rehearsal risk only")
             mcp_row.addWidget(QtWidgets.QLabel("MCP Spot标的 / Symbol"))
             mcp_row.addWidget(self.mcp_symbol)
             mcp_row.addWidget(self.mcp_connect)
             mcp_row.addWidget(self.mcp_import)
+            mcp_row.addWidget(QtWidgets.QLabel(
+                "演练累计亏损 / Rehearsal loss"))
+            mcp_row.addWidget(self.mcp_rehearsal_loss)
+            mcp_row.addWidget(self.mcp_rehearse)
             mcp_row.addStretch(1)
             account_layout.addLayout(mcp_row)
             self.mcp_status = QtWidgets.QLabel(
@@ -358,7 +392,9 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             account_layout.addWidget(self.mcp_account_summary)
             self.mcp_live_status = QtWidgets.QLabel(
                 "现有Agentic账户不会在这里重新创建或重新授权；真实提交入口保持禁用。\n"
-                "This page never recreates or reauthorizes the existing Agentic account; live submission disabled.")
+                "This page never recreates or reauthorizes the existing Agentic account; live submission disabled.\n"
+                "演练只生成 dispatch_prohibited 凭据，不调用 spot.newOrder。\n"
+                "Rehearsal writes a dispatch-prohibited artifact and never calls spot.newOrder.")
             self.mcp_live_status.setObjectName("mcpLiveStatus")
             self.mcp_live_status.setWordWrap(True)
             account_layout.addWidget(self.mcp_live_status)
@@ -600,6 +636,8 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                     "标的格式错误 / Invalid Spot symbol")
                 return
             self.mcp_symbol.setText(symbol)
+            self.mcp_verified_receipt = None
+            self.mcp_rehearse.setEnabled(False)
             self.mcp_account_summary.setText(
                 "尚未导入Codex返回的MCP账户快照 / No Codex MCP snapshot imported")
             try:
@@ -623,7 +661,12 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                     "标的格式错误 / Invalid Spot symbol")
                 return
             try:
-                path, summary = receipt_importer(symbol)
+                imported = receipt_importer(symbol)
+                if not isinstance(imported, tuple) or len(imported) not in (2, 3):
+                    raise ValueError("Invalid receipt importer result")
+                path, summary = imported[:2]
+                self.mcp_verified_receipt = imported[2] if len(imported) == 3 else None
+                self.mcp_rehearse.setEnabled(self.mcp_verified_receipt is not None)
                 self.mcp_account_summary.setText(
                     f"{summary['accountRef']} · {summary['symbol']} · "
                     f"canTrade={summary['canTrade']}\n"
@@ -636,10 +679,60 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                     f"Codex回执已严格核对：{path}\n"
                     "Codex receipt verified; no OAuth or order was started here.")
             except Exception as exc:
+                self.mcp_verified_receipt = None
+                self.mcp_rehearse.setEnabled(False)
                 self.mcp_account_summary.setText(
                     "本次无有效Codex快照 / No valid Codex snapshot from this attempt")
                 self.mcp_status.setText(
                     f"导入Codex回执失败 / Codex receipt import failed: {exc}")
+
+        def load_mcp_rehearsal(self):
+            if self.mcp_rehearsal_session is not None:
+                self.mcp_status.setText(
+                    "已有演练确认窗口 / A rehearsal confirmation is already open")
+                return
+            symbol = self.mcp_symbol.text().strip().upper()
+            receipt = self.mcp_verified_receipt
+            if receipt is None:
+                self.mcp_status.setText(
+                    "请先导入本次会话严格核验的Codex回执 / Import a verified Codex receipt first")
+                return
+            try:
+                session = rehearsal_loader(symbol, receipt,
+                    Decimal(str(self.mcp_rehearsal_loss.value())))
+                self.mcp_rehearsal_session = session
+                self.mcp_status.setText(
+                    "候选计划已通过本地预检；请在15秒内逐字确认。不会调用MCP。\n"
+                    "Candidate passed local preflight; confirm exactly within 15 seconds. No MCP call will occur.")
+                self.show_confirmed_order_prompt(session.preview,
+                    self._complete_mcp_rehearsal,
+                    self._cancel_mcp_rehearsal)
+            except Exception as exc:
+                self.mcp_rehearsal_session = None
+                self.mcp_status.setText(
+                    f"载入演练失败 / Rehearsal preparation failed: {exc}\n"
+                    f"候选路径 / Candidate path: {mcp_plan_file(symbol)}")
+
+        def _complete_mcp_rehearsal(self, phrase):
+            session, self.mcp_rehearsal_session = self.mcp_rehearsal_session, None
+            if session is None:
+                return
+            try:
+                path, report = session.confirm(phrase)
+                self.mcp_status.setText(
+                    f"本地演练完成：{path}\n"
+                    "dispatch_prohibited=true；required_tool=null；未调用 spot.newOrder。\n"
+                    f"Rehearsal complete for {report.symbol} {report.side}; no MCP call occurred.")
+            except Exception as exc:
+                self.mcp_status.setText(
+                    f"演练确认失败 / Rehearsal confirmation failed: {exc}")
+
+        def _cancel_mcp_rehearsal(self):
+            session, self.mcp_rehearsal_session = self.mcp_rehearsal_session, None
+            if session is not None:
+                session.cancel()
+            self.mcp_status.setText(
+                "演练已取消；未调用MCP / Rehearsal cancelled; no MCP call occurred")
 
         def show_confirmed_order_prompt(self, preview, on_confirmed, on_cancelled,
                                         *, clock_ms=None):
@@ -685,6 +778,8 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
         def closeEvent(self, event):
             for dialog in tuple(self.order_prompts):
                 dialog.reject()
+            if self.mcp_rehearsal_session is not None:
+                self._cancel_mcp_rehearsal()
             if self.runner is not None:
                 self.closing = True
                 self.timer.stop()
