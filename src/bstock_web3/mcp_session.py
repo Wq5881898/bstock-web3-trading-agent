@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
 import hashlib
@@ -29,6 +30,7 @@ class McpSessionPhase(StrEnum):
     RUNNING = "RUNNING"
     BUY_PAUSED = "BUY_PAUSED"
     WAITING_CONFIRMATION = "WAITING_CONFIRMATION"
+    WAITING_RESULT = "WAITING_RESULT"
     STOPPING = "STOPPING"
     RECOVERY_ONLY = "RECOVERY_ONLY"
 
@@ -97,7 +99,7 @@ class McpCandidateResult:
 class McpTradingSession:
     """One account/symbol/strategy session that only emits MCP candidate files."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self, path: Path, binding: McpSessionBinding,
                  policy_config: AutomationPolicyConfig | None = None):
@@ -182,7 +184,8 @@ class McpTradingSession:
 
         self.pending = {"status": "RESERVING", "signal_key": signal_key,
                         "plan_id": None, "plan_path": None,
-                        "side": signal.action.upper(), "created_at_ms": now_ms}
+                        "side": signal.action.upper(), "created_at_ms": now_ms,
+                        "execution_fingerprint": None, "ticket_path": None}
         self.phase = McpSessionPhase.WAITING_CONFIRMATION
         self.updated_at_ms = now_ms
         self._persist()
@@ -192,6 +195,7 @@ class McpTradingSession:
                 amount_usdt=self.policy_config.order_budget_quote,
                 position_quantity=snapshot.position_quantity,
                 account_binding=account,
+                now=datetime.fromtimestamp(now_ms / 1000, timezone.utc),
             )
             name = hashlib.sha256(signal_key.encode("utf-8")).hexdigest()[:20]
             plan_path = Path(output_dir) / f"candidate-{name}.json"
@@ -227,6 +231,70 @@ class McpTradingSession:
                           else McpSessionPhase.RUNNING)
         self._persist()
         return self.phase
+
+    def begin_confirmation(self, *, plan_id: str, now_ms: int):
+        """Persist the point after confirmation is consumed and before ticket I/O."""
+        if (self.phase != McpSessionPhase.WAITING_CONFIRMATION
+                or not self.pending or self.pending.get("status") != "READY"
+                or self.pending.get("plan_id") != plan_id):
+            raise RuntimeError("Candidate is not ready for confirmation")
+        self.pending["status"] = "CONFIRMING"
+        self.phase = McpSessionPhase.WAITING_RESULT
+        self.updated_at_ms = now_ms
+        self._persist()
+
+    def record_submission_ticket(self, *, plan_id: str,
+                                 execution_fingerprint: str,
+                                 ticket_path: Path, now_ms: int):
+        if (self.phase != McpSessionPhase.WAITING_RESULT
+                or not self.pending
+                or self.pending.get("status") != "CONFIRMING"
+                or self.pending.get("plan_id") != plan_id
+                or not re.fullmatch(r"[0-9a-f]{64}", execution_fingerprint)):
+            raise RuntimeError("Session is not awaiting a submission ticket")
+        self.pending.update(status="TICKET_READY",
+                            execution_fingerprint=execution_fingerprint,
+                            ticket_path=str(Path(ticket_path).resolve()))
+        self.updated_at_ms = now_ms
+        self._persist()
+
+    def record_execution_outcome(self, *, outcome: str,
+                                 evidence: McpReconciliationEvidence | None,
+                                 now_ms: int):
+        if (not self.pending
+                or self.pending.get("status") not in {"CONFIRMING",
+                                                       "TICKET_READY"}
+                or self.phase not in {McpSessionPhase.WAITING_RESULT,
+                                      McpSessionPhase.STOPPING}):
+            raise RuntimeError("Session is not awaiting an execution result")
+        if outcome == "UNKNOWN":
+            self.pending["status"] = "UNKNOWN"
+            self.phase = McpSessionPhase.RECOVERY_ONLY
+            self.recovery_reason = "execution_outcome_unknown"
+        elif outcome in {"FILLED", "REJECTED"}:
+            if evidence is not None:
+                self._validate_evidence(evidence, now_ms)
+                self.policy.observe(evidence.to_snapshot(), now_ms=now_ms)
+            stopping = self.phase == McpSessionPhase.STOPPING
+            self.pending = None
+            self.recovery_reason = None
+            self.phase = (McpSessionPhase.STOPPED if stopping else
+                          McpSessionPhase.BUY_PAUSED
+                          if self.policy.buy_pause_reason else
+                          McpSessionPhase.RUNNING)
+        else:
+            raise ValueError("Invalid execution outcome")
+        self.updated_at_ms = now_ms
+        self._persist()
+        return self.phase
+
+    def enter_recovery(self, *, reason: str, now_ms: int):
+        if not isinstance(reason, str) or not reason or len(reason) > 128:
+            raise ValueError("Invalid recovery reason")
+        self.phase = McpSessionPhase.RECOVERY_ONLY
+        self.recovery_reason = reason
+        self.updated_at_ms = now_ms
+        self._persist()
 
     def request_manual_resume(self, evidence: McpReconciliationEvidence,
                               *, now_ms: int):
@@ -326,7 +394,8 @@ class McpTradingSession:
             self.recovery_reason = payload["recovery_reason"]
             self._validate_loaded_state()
             if self.phase == McpSessionPhase.STARTING or (
-                    self.pending and self.pending.get("status") == "RESERVING"):
+                    self.pending and self.pending.get("status") in {
+                        "RESERVING", "CONFIRMING"}):
                 self.phase = McpSessionPhase.RECOVERY_ONLY
                 self.recovery_reason = "interrupted_persistent_transition"
                 self._persist()
@@ -346,10 +415,13 @@ class McpTradingSession:
             raise ValueError("Invalid session recovery reason")
         if self.pending is not None:
             expected = {"status", "signal_key", "plan_id", "plan_path",
-                        "side", "created_at_ms"}
+                        "side", "created_at_ms", "execution_fingerprint",
+                        "ticket_path"}
             if (not isinstance(self.pending, dict)
                     or set(self.pending) != expected
-                    or self.pending["status"] not in {"RESERVING", "READY"}
+                    or self.pending["status"] not in {
+                        "RESERVING", "READY", "CONFIRMING", "TICKET_READY",
+                        "UNKNOWN"}
                     or not isinstance(self.pending["signal_key"], str)
                     or not self.pending["signal_key"]
                     or len(self.pending["signal_key"]) > 256
@@ -358,15 +430,26 @@ class McpTradingSession:
                     or self.pending["created_at_ms"] < self.created_at_ms
                     or self.pending["created_at_ms"] > self.updated_at_ms):
                 raise ValueError("Invalid pending candidate")
-            ready = self.pending["status"] == "READY"
-            if ready != all(isinstance(self.pending[key], str)
-                            and bool(self.pending[key])
-                            for key in ("plan_id", "plan_path")):
+            reserved = self.pending["status"] == "RESERVING"
+            if reserved == all(isinstance(self.pending[key], str)
+                               and bool(self.pending[key])
+                               for key in ("plan_id", "plan_path")):
                 raise ValueError("Invalid pending candidate readiness")
-            if not ready and (self.pending["plan_id"] is not None
-                              or self.pending["plan_path"] is not None):
+            if reserved and (self.pending["plan_id"] is not None
+                             or self.pending["plan_path"] is not None):
                 raise ValueError("Invalid candidate reservation")
+            has_ticket = self.pending["status"] in {"TICKET_READY", "UNKNOWN"}
+            if has_ticket != (
+                    isinstance(self.pending["execution_fingerprint"], str)
+                    and bool(self.pending["execution_fingerprint"])
+                    and isinstance(self.pending["ticket_path"], str)
+                    and bool(self.pending["ticket_path"])):
+                raise ValueError("Invalid pending submission ticket")
+            if has_ticket and not re.fullmatch(
+                    r"[0-9a-f]{64}", self.pending["execution_fingerprint"]):
+                raise ValueError("Invalid execution fingerprint")
         pending_phases = {McpSessionPhase.WAITING_CONFIRMATION,
+                          McpSessionPhase.WAITING_RESULT,
                           McpSessionPhase.STOPPING}
         if ((self.phase in pending_phases and self.pending is None)
                 or (self.pending is not None

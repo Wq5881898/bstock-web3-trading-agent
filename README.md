@@ -65,6 +65,7 @@ it is **not an unattended live-trading release**.
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP持久化策略会话 / Durable MCP strategy session | 固定账户/标的/策略/风控绑定，信号幂等、停买保留SELL、停止和崩溃恢复 / Immutable account/symbol/strategy/risk binding, signal idempotency, SELL-preserving BUY latch, stop and crash recovery | [离线核心通过](docs/MCP_DURABLE_SESSION.md)；只生成候选，不提交 / Offline core accepted; candidate-only, no submission |
+| MCP会话确认闭环 / MCP session confirmation loop | 持久候选、七项预检、精确确认、一次性票据、终态/UNKNOWN回执、账本优先导入 / Durable candidate, seven-read preflight, exact confirmation, one-shot ticket, terminal/UNKNOWN receipt, ledger-first import | [离线闭环通过](docs/MCP_SESSION_EXECUTION.md)；真实写调用仍由宿主逐笔确认 / Offline loop accepted; real writes remain host-confirmed |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
 | MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；宿主网络接线待完成 / Strict import and recovery accepted offline; host network wiring pending |
@@ -151,6 +152,7 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [MCP执行安全 / MCP execution safety](docs/MCP_EXECUTION_SAFETY.md) ·
 [MCP文件化执行交接 / MCP file-safe execution handoff](docs/MCP_EXECUTION_HANDOFF.md) ·
 [MCP持久化策略会话 / Durable MCP strategy session](docs/MCP_DURABLE_SESSION.md) ·
+[MCP会话确认闭环 / MCP session confirmation loop](docs/MCP_SESSION_EXECUTION.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
 [MCP + Agentic收尾总计划 / Closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) ·
