@@ -25,23 +25,23 @@ This project no longer attempts to become a new Binance OAuth client. The workin
 
 - `bstock-mcp-request --symbol BTCUSDT`：只写一个限时、只读、无凭据的账户核对请求。
 - `bstock-mcp-import`：核对Codex回执并生成本地已验证快照；首次账户指纹必须显式登记。
-- `bstock-mcp-plan --symbol NVDAB --amount 20`：仅在策略产生可执行信号时写订单计划。
+- `bstock-mcp-plan --symbol NVDAB --amount 100`：仅在策略产生可执行信号且账户指纹已登记时写schema v3候选计划；不能直接下单。
 - 桌面“账户”页只导出读取请求，不弹出Binance登录页。
 - `mcp_spot_snapshot.py`、账本和风控模块严格校验宿主返回的脱敏结果。
 - 本地没有API Key回退；如MCP无法满足无人值守要求，必须另行讨论并明确批准其他接口。
 
 - `bstock-mcp-request --symbol BTCUSDT` writes a short-lived, read-only, credential-free reconciliation request.
 - `bstock-mcp-import` verifies a Codex receipt and writes a local verified snapshot; first-account fingerprint enrollment must be explicit.
-- `bstock-mcp-plan --symbol NVDAB --amount 20` writes an order plan only for an actionable strategy signal.
+- `bstock-mcp-plan --symbol NVDAB --amount 100` writes a schema-v3 candidate only for an actionable signal and enrolled account; it is not directly dispatchable.
 - The desktop Account tab exports a request and never opens Binance login.
 - Snapshot, ledger and risk modules strictly validate sanitized host results.
 - There is no API-key fallback. Any alternative requires a separate decision and explicit approval.
 
 ## Codex宿主执行规则 / Codex host rules
 
-读取请求到达后，Codex必须使用当前已经授权的Binance MCP连接，核对所选Agentic账户、余额、挂单、完整成交/订单分页、手续费、交易规则和盘口。订单计划必须重新检查时效、账户、余额、交易规则和最终参数；由支持的宿主/Binance完成用户确认。任何失败都关闭本次动作，不创建新账户、不重新走项目OAuth，也不静默切换到Agentic Wallet或API。
+读取请求到达后，Codex必须使用当前已经授权的Binance MCP连接，核对所选Agentic账户、余额、挂单、完整成交/订单分页、手续费、交易规则和盘口。候选计划必须重新检查时效、账户指纹、余额、交易规则和最终参数；确认被消费并且本地日志原子进入`SUBMITTING`后，才允许生成最多15秒的单次提交票据。任何失败都关闭本次动作，不创建新账户、不重新走项目OAuth，也不静默切换到Agentic Wallet或API。
 
-For a read request, Codex uses the already-authorized Binance MCP connection and verifies the selected Agentic account, balances, open orders, complete fill/order history, commission, exchange rules and book. Before an order, the supported host revalidates freshness, account, funds, rules and final arguments and owns user confirmation. Failure never creates an account, starts project OAuth or silently falls back to Wallet/API.
+For a read request, Codex uses the already-authorized Binance MCP connection and verifies the selected Agentic account, balances, open orders, complete fill/order history, commission, exchange rules and book. A candidate must be revalidated against freshness, account fingerprint, funds, rules and final arguments. Only consumed confirmation plus durable `SUBMITTING` may produce a one-shot ticket valid for at most 15 seconds. Failure never creates an account, starts project OAuth or silently falls back to Wallet/API.
 
 ## 读取回执闭环 / Read-receipt loop
 

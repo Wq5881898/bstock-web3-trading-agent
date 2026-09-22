@@ -136,6 +136,18 @@ class ConfirmedOrderResult:
     executed_quote: Decimal
 
 
+@dataclass(frozen=True)
+class ConfirmedSubmission:
+    """One externally dispatchable call after confirmation is consumed."""
+
+    fingerprint: str
+    client_order_id: str
+    account_ref: str
+    symbol: str
+    arguments: dict
+    prepared_at_ms: int
+
+
 class ConfirmedSpotExecutor:
     """Single-host executor; every submit consumes one exact confirmation.
 
@@ -178,6 +190,18 @@ class ConfirmedSpotExecutor:
         self._pending = None
 
     def submit(self, confirmation, evidence: McpReconciliationEvidence, *, now_ms):
+        submission = self.begin_submission(confirmation, evidence, now_ms=now_ms)
+        try:
+            payload = self._caller("spot.newOrder", dict(submission.arguments))
+            return self.accept_submission_result(
+                submission.fingerprint, payload, now_ms=now_ms)
+        except Exception:
+            self.mark_submission_unknown(submission.fingerprint, now_ms=now_ms)
+            raise RuntimeError("Submission uncertain; read-only lookup required") from None
+
+    def begin_submission(self, confirmation, evidence: McpReconciliationEvidence,
+                         *, now_ms):
+        """Consume confirmation and durably enter SUBMITTING before host I/O."""
         if self._pending is None:
             raise RuntimeError("No confirmation pending")
         intent, previous, rules, record, args, expected, created = self._pending
@@ -201,15 +225,35 @@ class ConfirmedSpotExecutor:
         if self.journal.get(record.fingerprint).phase != ExecutionPhase.PREPARED:
             raise RuntimeError("Execution no longer prepared")
         self.journal.transition(record.fingerprint, ExecutionPhase.SUBMITTING, now_ms=now_ms)
-        try:
-            payload = self._caller("spot.newOrder", dict(args))
-            result = self._parse(payload, record, args["side"])
-        except Exception:
-            self.journal.transition(record.fingerprint, ExecutionPhase.UNKNOWN,
-                                    now_ms=now_ms, detail="submission_uncertain")
-            raise RuntimeError("Submission uncertain; read-only lookup required") from None
+        return ConfirmedSubmission(record.fingerprint, record.client_order_id,
+                                   record.account_ref, record.symbol,
+                                   dict(args), now_ms)
+
+    def accept_submission_result(self, fingerprint, payload, *, now_ms):
+        """Validate a host result and advance the durable execution journal."""
+        if not self.journal.execution_lock_held:
+            raise RuntimeError("Execution lock required")
+        record = self.journal.get(fingerprint)
+        if record.phase not in (ExecutionPhase.SUBMITTING,
+                                ExecutionPhase.SUBMITTED,
+                                ExecutionPhase.UNKNOWN):
+            raise RuntimeError("Execution not awaiting a host result")
+        side = "BUY" if record.action == PositionAction.OPEN_LONG.value else "SELL"
+        result = self._parse(payload, record, side)
         self._record_result(record, result, now_ms)
         return result
+
+    def mark_submission_unknown(self, fingerprint, *, now_ms):
+        """Conservatively close an uncertain external handoff; never resubmit."""
+        if not self.journal.execution_lock_held:
+            raise RuntimeError("Execution lock required")
+        record = self.journal.get(fingerprint)
+        if record.phase == ExecutionPhase.UNKNOWN:
+            return record
+        if record.phase != ExecutionPhase.SUBMITTING:
+            raise RuntimeError("Only a submitting execution can become unknown")
+        return self.journal.transition(record.fingerprint, ExecutionPhase.UNKNOWN,
+            now_ms=now_ms, detail="submission_uncertain")
 
     def reconcile(self, fingerprint, *, now_ms):
         if not self.journal.execution_lock_held:

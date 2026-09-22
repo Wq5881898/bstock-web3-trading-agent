@@ -15,7 +15,8 @@ Intent + reconciled evidence + verified symbol rules
   → exact account/order preview + one-shot confirmation (15 seconds)
   → fresh evidence + risk/amount revalidation
   → durable SUBMITTING
-  → one injected spot.newOrder call
+  → ≤15-second single-submission ticket (confirmation phrase omitted)
+  → one injected or supported-host spot.newOrder call
   → SUBMITTED / FILLED / REJECTED
   → timeout or invalid result: UNKNOWN → spot.getOrder only
 ```
@@ -41,8 +42,8 @@ The minimal rule gate rejects unsupported/dust cases instead of silently roundin
 
 ## 验证 / Validation
 
-当前完整回归412项通过，其中执行器离线测试覆盖确认/过期/消费、账户变化、余额/权限/亏损/未决/过期快照、锁失效、超时只查单、提交前落盘、重启恢复、部分成交、停买继续卖出、dust与金额规则、写盘失败、预览篡改、取消与订单身份不匹配；宿主测试还覆盖真实schema形状、无损number适配和有损金额调用前拒绝。未执行真实订单。
+当前完整回归424项通过，其中执行器离线测试覆盖确认/过期/消费、账户变化、余额/权限/亏损/未决/过期快照、锁失效、超时只查单、提交前落盘、重启恢复、部分成交、停买继续卖出、dust与金额规则、写盘失败、预览篡改、取消与订单身份不匹配；文件交接还覆盖账户/信号绑定、确认后原子SUBMITTING、15秒单次票据、风险元数据一致性、交易规则资产一致性、篡改/过期拒绝和确认短语不落盘。未执行真实订单。
 
-The full suite currently passes 412 tests, covering the confirmed executor plus live-schema-shaped numeric adaptation and pre-call rejection of lossy amounts. No live order was performed.
+The full suite currently passes 424 tests, covering the confirmed executor, live-schema numeric adaptation, risk/market identity consistency and the file-safe one-shot submission-ticket boundary. No live order was performed.
 
 官方确认要求 / Official confirmation policy: [Binance MCP Server](https://developers.binance.com/en/docs/agent-native/mcp-server/agentic).

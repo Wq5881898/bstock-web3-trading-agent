@@ -154,6 +154,31 @@ def test_submitting_is_persisted_before_tool_call(executor):
     engine.submit(plan["confirmation"],evidence(),now_ms=NOW+1)
 
 
+def test_external_handoff_begins_before_io_and_accepts_result(executor):
+    engine,caller,_=executor; plan=preview(engine)
+    submission=engine.begin_submission(
+        plan["confirmation"], evidence(), now_ms=NOW+1)
+    record=engine.journal.get(submission.fingerprint)
+    assert record.phase == ExecutionPhase.SUBMITTING
+    assert caller.calls == []
+    assert submission.arguments["newClientOrderId"] == record.client_order_id
+    payload=caller("spot.newOrder",submission.arguments)
+    result=engine.accept_submission_result(
+        submission.fingerprint,payload,now_ms=NOW+2)
+    assert result.status == "FILLED"
+    assert engine.journal.get(submission.fingerprint).phase == ExecutionPhase.FILLED
+
+
+def test_external_handoff_can_be_marked_unknown_only_once(executor):
+    engine,caller,_=executor; plan=preview(engine)
+    submission=engine.begin_submission(
+        plan["confirmation"], evidence(), now_ms=NOW+1)
+    first=engine.mark_submission_unknown(submission.fingerprint,now_ms=NOW+2)
+    second=engine.mark_submission_unknown(submission.fingerprint,now_ms=NOW+3)
+    assert first.phase == second.phase == ExecutionPhase.UNKNOWN
+    assert caller.calls == []
+
+
 def test_restart_submitting_performs_only_order_lookup(executor):
     engine,caller,lock=executor; preview(engine)
     record=engine.journal.records()[0]

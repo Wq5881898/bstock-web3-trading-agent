@@ -43,7 +43,7 @@ and writes SHA-256 hashes in its manifest.
 ## 5. Show the Agent OS MCP path
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 20
+bstock-mcp-plan --symbol NVDAB --amount 100
 ```
 
 The plan targets `NVDABUSDT` Spot in the existing Codex-host-selected Agentic sub-account. It contains

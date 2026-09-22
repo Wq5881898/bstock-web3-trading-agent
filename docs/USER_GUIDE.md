@@ -217,12 +217,12 @@ no external-withdrawal scope.
 ### 9.4 从本地信号生成 MCP 计划
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 20
+bstock-mcp-plan --symbol NVDAB --amount 100
 ```
 
 - 如果返回 `mcpPlanCreated: false`，本轮结束，不下单。
-- 如果返回 `true`，计划位于 `runtime/mcp/latest-order-plan.json`，默认 45 秒过期。
-- JSON 只是数据交接，不会自动调用 MCP。
+- 如果返回 `true`，schema v3候选位于 `runtime/mcp/latest-order-plan.json`，默认45秒过期。
+- 候选绑定已登记账户和稳定信号指纹，但没有最终客户端订单ID；不能直接调用MCP。
 
 ### 9.5 让 Agent 核验，但先不下单
 
@@ -239,8 +239,7 @@ bstock-mcp-plan --symbol NVDAB --amount 20
 
 ### 9.6 用户逐笔确认与成交核验
 
-只有在用户核对最终的标的、方向、金额、类型、手续费和时效后，才可回复计划要求的一次性确认码。
-Agent 随后只能调用计划白名单中的 `spot.newOrder`，并必须继续查询订单终态和实际成交记录。
+只有在用户核对最终的标的、方向、金额、类型、手续费和时效后，才可输入本次预览的一次性确认码。确认被消费后，执行日志必须先原子进入`SUBMITTING`，然后才生成带确定性客户端订单ID、最多15秒有效的单次提交票据。Agent只能用该票据调用一次`spot.newOrder`，并继续查询订单终态和实际成交记录；任何不确定结果只能通过`spot.getOrder(origClientOrderId)`恢复，禁止重发。
 
 生成计划、显示确认码或获得订单 ID 都不等于成交成功。以最终订单状态和成交记录为准。
 

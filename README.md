@@ -61,7 +61,7 @@ it is **not an unattended live-trading release**.
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
-| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、最小Spot规则、部分成交及超时/重启只查单 / Exact confirmation, 15-second expiry, pre-submit checks, minimal Spot rules, partial fills and lookup-only recovery | 注入假宿主调用验收；未接桌面真实提交 / Tested with an injected host caller; no desktop live submission |
+| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
 | 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
 | Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
@@ -71,8 +71,8 @@ it is **not an unattended live-trading release**.
 
 ### 默认模拟风控 / Default Paper Controls
 
-- 桌面单笔金额100，持仓成本上限100；CLI历史单笔默认20保持不变。<br>
-  Desktop entry budget and position cost cap: 100 each; historical CLI entry default remains 20.
+- 桌面和MCP候选计划默认单笔金额100，持仓成本上限100；可在显式同步风控配置后调整。<br>
+  Desktop and MCP candidate entry budget default to 100, with a 100 position-cost cap; adjust only with matching explicit policy configuration.
 - UTC日累计净值亏损阈值10，包含模拟手续费和持仓浮动损益；连续亏损3笔、每日最多20次开仓、开仓冷却60秒。<br>
   UTC daily equity-loss threshold: 10, including simulated fees and unrealized PnL;
   three losing closes, 20 daily entries and a 60-second entry cooldown.
@@ -91,8 +91,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**412项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **412 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**424项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **424 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -143,6 +143,7 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [统一策略架构 / Unified strategy architecture](docs/UNIFIED_STRATEGY_ARCHITECTURE.md) ·
 [自动交易风控 / Automation policy](docs/AUTOMATION_POLICY.md) ·
 [MCP执行安全 / MCP execution safety](docs/MCP_EXECUTION_SAFETY.md) ·
+[MCP文件化执行交接 / MCP file-safe execution handoff](docs/MCP_EXECUTION_HANDOFF.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
 [回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
@@ -225,15 +226,15 @@ Fixed-Range public-feed paper smoke (no account and no real orders):
 ### 生成 Agent OS MCP 订单计划 / Create an Agent OS MCP Plan
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 20
+bstock-mcp-plan --symbol NVDAB --amount 100
 ```
 
-如果策略返回 `hold`，程序不会创建订单计划。只有可执行的 `buy` 或 `sell` 信号才会在
-`runtime/mcp/` 下生成短时有效的 JSON 计划。该文件本身不会调用 MCP，也不会执行交易。
+该命令要求先通过只读回执完成Agentic账户指纹登记。如果策略返回 `hold`，程序不会创建订单计划。只有包含统一策略ID和稳定事件时间的 `buy` 或 `sell` 信号才会在`runtime/mcp/`下生成schema v3短时候选计划。候选计划绑定账户指纹和稳定信号指纹，但没有最终客户端订单ID，不能直接提交。
 
-If the strategy returns `hold`, no order plan is created. Only an actionable `buy` or
-`sell` signal produces a short-lived JSON plan under `runtime/mcp/`. The file cannot call
-MCP or place an order by itself.
+The command requires an Agentic account fingerprint enrolled by the read-receipt flow. A
+`hold` creates no plan. Only `buy`/`sell` signals with a registered strategy ID and stable
+event time produce a short-lived schema-v3 candidate under `runtime/mcp/`. It binds the
+account and signal but has no final client order ID and cannot be submitted directly.
 
 详细流程请参阅 [Agent OS MCP 双执行通道说明](docs/AGENT_OS_MCP.md)。<br>
 See [Agent OS MCP dual-execution guide](docs/AGENT_OS_MCP.md) for the complete workflow.
@@ -270,11 +271,13 @@ See the [demo guide](docs/DEMO.md) for a concise judging and video flow.
    The operator enters the one-time random confirmation generated for that exact plan.
 
 MCP 通道还要求宿主在逐笔确认前重新查询 Agentic 子账户、Spot 规则、余额、手续费和最终订单参数。
-生成 MCP JSON 计划不等于授权交易。
+生成 MCP JSON 候选计划不等于授权交易。确认后必须先把执行日志原子推进到`SUBMITTING`，再生成最多15秒有效、带确定性客户端订单ID的单次提交票据。
 
 The MCP path additionally requires the host to re-query the Agentic sub-account, Spot
 rules, balances, commission and final order parameters before per-order confirmation.
-Creating an MCP JSON plan is not authorization to trade.
+Creating an MCP JSON candidate is not authorization to trade. After confirmation, the
+execution journal must durably enter `SUBMITTING` before a deterministic-client-ID ticket
+valid for no more than 15 seconds can be emitted.
 
 获得订单 ID 后，程序会先原子化保存，再查询终态。超时或重启不会导致静默重复下单。项目不会保存
 私钥、助记词、Binance 密码、钱包会话凭据或 MCP OAuth Token。
@@ -295,7 +298,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `410 passed`
+- 本地自动化测试 / Local automated tests: `424 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

@@ -17,18 +17,23 @@ The local application never performs OAuth or reads/stores an access token. The
 already-authorized Codex task is the supported MCP host. Run:
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 20
+bstock-mcp-plan --symbol NVDAB --amount 100
 ```
 
-The command consumes completed public 1m/5m bars and the same deterministic MTF EMA
+The command requires the account fingerprint enrolled by the read-receipt flow, then consumes completed public 1m/5m bars and the same deterministic MTF EMA
 strategy used by paper/replay. A `hold` signal creates no order plan. A valid `buy` or
 `sell` signal creates `runtime/mcp/latest-order-plan.json` with:
 
-- the exact Spot symbol, side, type and amount;
+- the exact Spot symbol, side, type and candidate amount;
 - the causal signal and expected-edge risk inputs;
 - a 45-second expiry;
-- the only allowed dispatch tool, `spot.newOrder`;
+- an enrolled account binding and stable signal fingerprint;
+- the only eventual dispatch tool, `spot.newOrder`, plus lookup-only `spot.getOrder`;
 - mandatory host checks.
+
+This schema-v3 file is a preflight candidate, not a dispatch request. It deliberately has
+no final client order ID. The deterministic ID is created only after fresh reconciliation,
+policy checks and exact per-order confirmation.
 
 The Agent OS host must then perform this sequence:
 
@@ -36,10 +41,12 @@ The Agent OS host must then perform this sequence:
 2. Call `spot.getAccount` and verify `canTrade`, available balance and Agentic sub-account.
 3. Query current Spot symbol status, filters, price/book and `spot.accountCommission`.
 4. Recalculate expected order cost and reject stale, unaffordable or invalid plans.
-5. Show the final symbol, side, order type, amount, estimated cost and plan expiry.
-6. Obtain the required confirmation through the supported Codex/Binance host.
-7. Validate the plan expiry and call only `spot.newOrder` with the plan arguments.
-8. Query the terminal order status and trades; persist a sanitized audit receipt.
+5. Convert the candidate into the common `OrderIntent`; pass fresh evidence through the automation policy and durable execution journal.
+6. Show the final symbol, side, order type, amount, deterministic client order ID and expiry; obtain exact per-order confirmation.
+7. Consume confirmation, atomically persist `SUBMITTING`, and emit a single-submission ticket valid for at most 15 seconds.
+8. Revalidate the ticket and live schema, then call `spot.newOrder` exactly once with the ticket arguments.
+9. Validate the response and query terminal order/trades; uncertain outcomes become `UNKNOWN` and may call only `spot.getOrder` with the deterministic client ID.
+10. Persist a sanitized terminal receipt and refresh the full read snapshot before updating the fill/risk ledger.
 
 No live call may be made merely because a JSON plan exists. If the host is unavailable,
 its session expires, the symbol is not trading, or any verification fails, stop without

@@ -10,6 +10,7 @@
 - 脱敏宿主回执、显式首次账户指纹登记、后续账户漂移拒绝和桌面导入。
 - 新回执格式已对既有Agentic账户完成一次真实BTCUSDT只读闭环；7项读取、完整分页、脱敏和严格导入均通过。
 - 已读取并验证真实`spot.newOrder/spot.getOrder` schema；修复JSON number金额适配和条件查询字段兼容，未调用写工具。
+- 订单候选计划升级为严格schema v3：绑定已登记账户和稳定信号指纹，不能直接提交；确认后先原子写入SUBMITTING，再生成最多15秒的单次提交票据。
 - Agentic Wallet作为彼此独立的BSC执行通道，不作为MCP失败时的自动回退。
 
 - Unified strategy registry with Spot/Web3/Futures tags; MTF, Median and Range share one interface, with Slope excluded.
@@ -20,6 +21,7 @@
 - Sanitized host receipts, explicit first fingerprint enrollment, account-drift rejection and desktop import.
 - The new receipt format completed one live BTCUSDT read loop against the existing Agentic account; all seven reads, complete pagination, sanitization and strict import passed.
 - Live `spot.newOrder/spot.getOrder` schemas were read and validated; JSON-number amount adaptation and conditional lookup compatibility were fixed without invoking a write tool.
+- Candidate plans now use strict schema v3, bind the enrolled account plus a stable signal fingerprint, and cannot be submitted directly; confirmation durably enters SUBMITTING before a ≤15-second one-shot ticket is emitted.
 - Agentic Wallet remains an independent BSC transport, never an automatic MCP fallback.
 
 ## 已纠正 / Corrected
