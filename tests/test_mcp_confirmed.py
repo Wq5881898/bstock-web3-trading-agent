@@ -273,3 +273,36 @@ def test_incorrect_order_identity_is_unknown_not_filled(executor):
     with pytest.raises(RuntimeError,match="uncertain"):
         engine.submit(plan["confirmation"],evidence(),now_ms=NOW+1)
     assert engine.journal.records()[0].phase == ExecutionPhase.UNKNOWN
+
+
+@pytest.mark.parametrize(("status", "executed"), [
+    ("NEW", "1"), ("PARTIALLY_FILLED", "0"), ("REJECTED", "1"),
+])
+def test_order_status_must_match_executed_amounts(executor, status, executed):
+    engine, caller, _ = executor
+    plan = preview(engine)
+    original = engine._caller
+    def inconsistent(name, args):
+        payload = original(name, args)
+        payload.update(status=status, executedQty=executed,
+                       cummulativeQuoteQty=executed)
+        return payload
+    engine._caller = inconsistent
+    with pytest.raises(RuntimeError, match="uncertain"):
+        engine.submit(plan["confirmation"], evidence(), now_ms=NOW + 1)
+    assert engine.journal.records()[0].phase == ExecutionPhase.UNKNOWN
+
+
+def test_terminal_status_cannot_change_on_reimport(executor):
+    engine, caller, _ = executor
+    plan = preview(engine)
+    caller.status = "CANCELED"
+    engine.submit(plan["confirmation"], evidence(), now_ms=NOW + 1)
+    record = engine.journal.records()[0]
+    changed = {"symbol":"BTCUSDT", "clientOrderId":record.client_order_id,
+        "side":"BUY", "type":"MARKET", "orderId":123,
+        "status":"EXPIRED", "executedQty":"1",
+        "cummulativeQuoteQty":"100"}
+    with pytest.raises(RuntimeError, match="Terminal execution result changed"):
+        engine.accept_submission_result(record.fingerprint, changed,
+                                        now_ms=NOW + 2)

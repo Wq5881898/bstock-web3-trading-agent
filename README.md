@@ -62,6 +62,7 @@ it is **not an unattended live-trading release**.
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
+| MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；宿主网络接线待完成 / Strict import and recovery accepted offline; host network wiring pending |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
 | 桌面逐笔确认 / Desktop per-order confirmation | 账户/方向/精确金额展示、一次性短语、15秒过期、关闭即取消 / Account/side/exact amount, one-time phrase, 15-second expiry and cancel-on-close | [弹窗已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / Dialog offline accepted; live submission remains disabled |
 | Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
@@ -91,8 +92,8 @@ market snapshot and do not trigger additional wallet calls or orders.
 
 ### 验证与尚未完成 / Verification and Remaining Work
 
-- 本地Python 3.11完整回归：**424项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
-  Local Python 3.11 regression: **424 passed**. Native synthetic desktop acceptance:
+- 本地Python 3.11完整回归：**442项通过**。原生桌面合成验收：650轮刷新，包含38次故障注入。<br>
+  Local Python 3.11 regression: **442 passed**. Native synthetic desktop acceptance:
   650 refresh attempts with 38 injected failures.
 - Median完成200轮/400笔模拟成交，多次重启与重复重放、事务失败回滚、并发旧写入方拒绝测试。<br>
   Median completed 200 rounds/400 simulated fills with repeated restores/replays,
@@ -298,7 +299,7 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 ## 当前代码状态 / Current Code Status
 
 - 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `424 passed`
+- 本地自动化测试 / Local automated tests: `442 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

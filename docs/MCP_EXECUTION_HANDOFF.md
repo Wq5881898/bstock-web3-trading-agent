@@ -6,13 +6,15 @@
 
 This boundary separates the local strategy/risk process from the Codex host that owns the existing Binance Agent OS authorization. It creates no OAuth client, stores no token and performs no network call. A strategy signal alone never creates dispatchable order arguments.
 
-## 两类文件 / Two artifacts
+## 三类文件 / Three artifacts
 
 1. `McpSpotOrderPlan` schema v3是短时候选计划。它绑定已登记账户、币对、策略ID、稳定事件时间、信号指纹、方向和候选金额；状态固定为`AWAITING_HOST_PREFLIGHT`。它没有最终客户端订单ID，不能直接传给`spot.newOrder`。
 2. `McpSpotSubmissionTicket`是确认后的单次提交票据。只有新鲜账户证据、Spot规则、自动风控、跨进程锁和执行日志全部通过，用户的精确确认被消费，而且`SUBMITTING`已经原子落盘后才能生成。票据最多有效15秒，包含确定性客户端订单ID，但不包含确认短语、UID或凭据。
+3. `VerifiedMcpSpotExecutionReceipt`是提交后的脱敏结果。`UNKNOWN`回执只能把本地状态锁为只查单；`TERMINAL`回执必须同时包含`spot.getOrder`和7项完整只读刷新，交易历史与订单历史必须完整分页。
 
 1. Schema-v3 `McpSpotOrderPlan` is a short-lived candidate bound to the enrolled account, symbol, registered strategy, immutable event time, signal fingerprint, side and candidate amount. Its status is `AWAITING_HOST_PREFLIGHT`; it has no final client order ID and cannot be passed directly to `spot.newOrder`.
 2. `McpSpotSubmissionTicket` is the post-confirmation one-shot artifact. It can exist only after fresh evidence, Spot rules, policy, process lock and journal checks pass, the exact confirmation is consumed, and `SUBMITTING` is durably persisted. It lasts no more than 15 seconds and contains a deterministic client order ID, but no confirmation phrase, UID or credential.
+3. `VerifiedMcpSpotExecutionReceipt` is the sanitized post-submission result. An `UNKNOWN` receipt can only lock local state into lookup-only recovery. A `TERMINAL` receipt must contain `spot.getOrder` plus all seven complete read refreshes, with complete trade and order pagination.
 
 ## 固定顺序 / Required sequence
 
@@ -27,9 +29,11 @@ This boundary separates the local strategy/risk process from the Codex host that
   → 原子写入 SUBMITTING
   → 最多15秒的单次提交票据
   → Codex宿主schema门禁并调用一次 spot.newOrder
-  → 严格结果回写；不确定即 UNKNOWN
+  → 严格结果回执；不确定即 UNKNOWN
   → UNKNOWN只允许spot.getOrder(origClientOrderId)，禁止重发
-  → 完整成交重读并同步成交/权益风险账本
+  → 终态订单、完整成交、订单历史与余额交叉核对
+  → 先幂等同步Spot成交账本，再推进FILLED/REJECTED执行日志
+  → 生成下一轮可用的账户/持仓/风险证据
 ```
 
 The confirmation phrase never enters the ticket or durable logs. The host must validate the ticket expiry, exact tool, exact arguments, account binding and live tool schema immediately before the single call.
@@ -51,6 +55,6 @@ If the process dies in `SUBMITTING`, restart changes it to `UNKNOWN` before look
 
 ## 当前边界 / Current boundary
 
-本轮完成候选计划、确认拆分、原子`SUBMITTING`、单次票据、票据读写和离线故障测试。尚未把桌面策略事件自动接到此流程，也没有调用真实`spot.newOrder`。下一阶段需要实现宿主终态回执导入、完整成交重读和账本同步，然后才能进行明确确认的最小金额真实验收。
+本轮已完成候选计划、确认拆分、原子`SUBMITTING`、单次票据、严格终态/UNKNOWN回执、完整成交重读和成交账本同步。终态导入要求`getOrder`、`allOrders`和`myTrades`金额一致，完整账户余额能由成交历史解释；成交账本写入失败时执行日志不会前进，重复导入保持幂等。尚未把桌面策略事件和Codex真实工具调用自动接到此流程，也没有调用真实`spot.newOrder`。下一阶段是桌面/宿主编排接线和只读演练。
 
-This revision implements candidate plans, split confirmation/submission, durable `SUBMITTING`, one-shot ticket persistence and offline failure tests. Desktop strategy events are not yet wired to it and no live `spot.newOrder` was called. The next phase is strict host-result import, full fill refresh and ledger synchronization before any explicitly confirmed minimum-size live acceptance.
+This revision implements candidate plans, split confirmation/submission, durable `SUBMITTING`, one-shot tickets, strict terminal/UNKNOWN receipts, complete fill refresh and fill-ledger synchronization. Terminal import requires amount agreement across `getOrder`, `allOrders` and `myTrades`, plus a balance snapshot explainable by complete fills. A fill-ledger write failure cannot advance the execution journal, and re-import is idempotent. Desktop/host orchestration remains unwired and no live `spot.newOrder` was called. The next phase is desktop/host wiring and a read-only rehearsal.

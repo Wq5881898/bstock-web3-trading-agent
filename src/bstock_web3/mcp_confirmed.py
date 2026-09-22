@@ -236,12 +236,21 @@ class ConfirmedSpotExecutor:
         record = self.journal.get(fingerprint)
         if record.phase not in (ExecutionPhase.SUBMITTING,
                                 ExecutionPhase.SUBMITTED,
-                                ExecutionPhase.UNKNOWN):
+                                ExecutionPhase.UNKNOWN,
+                                ExecutionPhase.FILLED,
+                                ExecutionPhase.REJECTED):
             raise RuntimeError("Execution not awaiting a host result")
-        side = "BUY" if record.action == PositionAction.OPEN_LONG.value else "SELL"
-        result = self._parse(payload, record, side)
+        result = self.validate_submission_result(fingerprint, payload)
         self._record_result(record, result, now_ms)
         return result
+
+    def validate_submission_result(self, fingerprint, payload):
+        """Validate an order result without mutating the execution journal."""
+        if not self.journal.execution_lock_held:
+            raise RuntimeError("Execution lock required")
+        record = self.journal.get(fingerprint)
+        side = "BUY" if record.action == PositionAction.OPEN_LONG.value else "SELL"
+        return self._parse(payload, record, side)
 
     def mark_submission_unknown(self, fingerprint, *, now_ms):
         """Conservatively close an uncertain external handoff; never resubmit."""
@@ -250,8 +259,9 @@ class ConfirmedSpotExecutor:
         record = self.journal.get(fingerprint)
         if record.phase == ExecutionPhase.UNKNOWN:
             return record
-        if record.phase != ExecutionPhase.SUBMITTING:
-            raise RuntimeError("Only a submitting execution can become unknown")
+        if record.phase not in (ExecutionPhase.SUBMITTING,
+                                ExecutionPhase.SUBMITTED):
+            raise RuntimeError("Only an unresolved execution can become unknown")
         return self.journal.transition(record.fingerprint, ExecutionPhase.UNKNOWN,
             now_ms=now_ms, detail="submission_uncertain")
 
@@ -289,6 +299,9 @@ class ConfirmedSpotExecutor:
         base, quote = number(payload.get("executedQty")), number(payload.get("cummulativeQuoteQty"))
         if (base == 0) != (quote == 0) or (payload["status"] == "FILLED" and base == 0):
             raise ValueError("Invalid Spot executed amounts")
+        if (payload["status"] == "PARTIALLY_FILLED" and base == 0) \
+                or (payload["status"] in ("NEW", "REJECTED") and base != 0):
+            raise ValueError("Invalid Spot status and executed amounts")
         if (quote if record.amount_kind == "QUOTE" else base) > number(record.amount):
             raise ValueError("Execution exceeds confirmed amount")
         return ConfirmedOrderResult(str(payload["orderId"]), payload["status"], base, quote)
@@ -297,7 +310,16 @@ class ConfirmedSpotExecutor:
         phase = (ExecutionPhase.FILLED if result.status == "FILLED" else
                  ExecutionPhase.SUBMITTED if result.status in ("NEW", "PARTIALLY_FILLED")
                  else ExecutionPhase.REJECTED)
-        if self.journal.get(record.fingerprint).phase == phase:
+        current = self.journal.get(record.fingerprint)
+        if current.phase == phase:
+            if (current.external_id is not None
+                    and current.external_id != result.order_id):
+                raise RuntimeError("External order id changed during reconciliation")
+            if (current.phase in (ExecutionPhase.FILLED, ExecutionPhase.REJECTED)
+                    and current.detail != result.status):
+                raise RuntimeError("Terminal execution result changed")
             return
+        if current.phase in (ExecutionPhase.FILLED, ExecutionPhase.REJECTED):
+            raise RuntimeError("Terminal execution result changed")
         self.journal.transition(record.fingerprint, phase, now_ms=now_ms,
             external_id=result.order_id, detail=result.status)

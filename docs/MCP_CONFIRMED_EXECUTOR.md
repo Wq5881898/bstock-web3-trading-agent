@@ -17,6 +17,9 @@ Intent + reconciled evidence + verified symbol rules
   → durable SUBMITTING
   → ≤15-second single-submission ticket (confirmation phrase omitted)
   → one injected or supported-host spot.newOrder call
+  → sanitized terminal/UNKNOWN receipt
+  → complete getOrder/allOrders/myTrades/account reconciliation
+  → idempotent fill-ledger sync
   → SUBMITTED / FILLED / REJECTED
   → timeout or invalid result: UNKNOWN → spot.getOrder only
 ```
@@ -42,8 +45,8 @@ The minimal rule gate rejects unsupported/dust cases instead of silently roundin
 
 ## 验证 / Validation
 
-当前完整回归424项通过，其中执行器离线测试覆盖确认/过期/消费、账户变化、余额/权限/亏损/未决/过期快照、锁失效、超时只查单、提交前落盘、重启恢复、部分成交、停买继续卖出、dust与金额规则、写盘失败、预览篡改、取消与订单身份不匹配；文件交接还覆盖账户/信号绑定、确认后原子SUBMITTING、15秒单次票据、风险元数据一致性、交易规则资产一致性、篡改/过期拒绝和确认短语不落盘。未执行真实订单。
+当前完整回归442项通过，其中执行器离线测试覆盖确认/过期/消费、账户变化、余额/权限/亏损/未决/过期快照、锁失效、超时只查单、提交前落盘、重启恢复、部分成交、停买继续卖出、dust与金额规则、写盘失败、预览篡改、取消与订单身份不匹配；文件交接还覆盖账户/信号绑定、确认后原子SUBMITTING、15秒单次票据、风险元数据一致性、交易规则资产一致性、终态/UNKNOWN回执、完整分页、成交金额交叉核对、终态不可变、终态订单不再挂单、停牌后仍可收敛旧订单、成交账本优先提交、幂等重放、嵌套数据二次校验以及确认短语不落盘。未执行真实订单。
 
-The full suite currently passes 424 tests, covering the confirmed executor, live-schema numeric adaptation, risk/market identity consistency and the file-safe one-shot submission-ticket boundary. No live order was performed.
+The full suite currently passes 442 tests, covering the confirmed executor, live-schema numeric adaptation, risk/market identity consistency, one-shot tickets, strict terminal/UNKNOWN receipts, immutable terminal states, complete fill reconciliation, nested-data revalidation, halted-symbol finalization and ledger-first idempotent recovery. No live order was performed.
 
 官方确认要求 / Official confirmation policy: [Binance MCP Server](https://developers.binance.com/en/docs/agent-native/mcp-server/agentic).

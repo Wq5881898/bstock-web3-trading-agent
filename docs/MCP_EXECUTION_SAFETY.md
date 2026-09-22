@@ -66,9 +66,9 @@ SUBMITTED/FILLED/REJECTED；超时则 UNKNOWN → 只查单
 
 ## 仍未完成 / Still pending
 
-后续更新：已新增`USER_CONFIRMED`准备模式、[MCP逐笔确认执行器](MCP_CONFIRMED_EXECUTOR.md)和文件化提交票据。候选计划不能直接调用工具；确认被消费且日志原子进入`SUBMITTING`后，才会生成最多15秒有效的单次票据。它仍不是联网MCP写适配器，原有只读transport未放宽，真实写宿主和桌面下单仍未接线。
+后续更新：已新增`USER_CONFIRMED`准备模式、[MCP逐笔确认执行器](MCP_CONFIRMED_EXECUTOR.md)、文件化提交票据和严格终态/UNKNOWN结果回执。候选计划不能直接调用工具；确认被消费且日志原子进入`SUBMITTING`后，才会生成最多15秒有效的单次票据。终态回执必须完成查单、完整分页、订单/成交/余额核对，并先同步成交账本再推进执行日志。它仍不是联网MCP写适配器，原有只读transport未放宽，真实写宿主和桌面下单仍未接线。
 
-Follow-up: `USER_CONFIRMED`, the offline-tested confirmed executor and a file-safe one-shot ticket now cover confirmation/submission/lookup boundaries. A candidate cannot call a tool; only consumed confirmation plus durable `SUBMITTING` can produce a ticket valid for at most 15 seconds. This is not a live MCP write transport; real-host/desktop wiring remains pending.
+Follow-up: `USER_CONFIRMED`, the offline-tested confirmed executor, a file-safe one-shot ticket and strict terminal/UNKNOWN receipts now cover confirmation/submission/lookup/import boundaries. A candidate cannot call a tool; only consumed confirmation plus durable `SUBMITTING` can produce a ticket valid for at most 15 seconds. Terminal import requires lookup, complete pagination and order/fill/balance reconciliation, then persists the fill ledger before the execution journal. This is not a live MCP write transport; real-host/desktop wiring remains pending.
 
 当前仓库已有无网络的只读MCP协议校验、Agentic Spot快照对账、逐笔确认执行器，以及宿主schema边界。认证和网络属于现有Codex MCP宿主；桌面仍未连接真实下单，不能称作已完成自动实盘调用。跨进程锁由安全准备入口强制要求，UNKNOWN状态只允许按客户端订单ID查单。任何API Key交易替代路线仍需先与用户讨论并取得明确允许。
 

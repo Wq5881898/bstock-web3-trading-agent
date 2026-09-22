@@ -48,6 +48,16 @@ The Agent OS host must then perform this sequence:
 9. Validate the response and query terminal order/trades; uncertain outcomes become `UNKNOWN` and may call only `spot.getOrder` with the deterministic client ID.
 10. Persist a sanitized terminal receipt and refresh the full read snapshot before updating the fill/risk ledger.
 
+The offline import boundary for steps 9–10 is now implemented in
+`mcp_execution_result.py`. A terminal receipt is accepted only when `spot.getOrder`,
+`spot.allOrders`, complete `spot.myTrades`, balances and the symbol identity agree.
+Complete fills are persisted before the execution journal advances. An `UNKNOWN`
+receipt contains no guessed order result and only activates lookup-only recovery.
+
+第9–10步的离线导入边界现已在`mcp_execution_result.py`实现。只有当`spot.getOrder`、
+`spot.allOrders`、完整`spot.myTrades`、余额和交易对身份相互一致时才接受终态回执；
+程序先持久化完整成交，再推进执行日志。`UNKNOWN`回执不包含猜测结果，只会启动只查单恢复。
+
 No live call may be made merely because a JSON plan exists. If the host is unavailable,
 its session expires, the symbol is not trading, or any verification fails, stop without
 using the Agentic Wallet path as an implicit substitute.
