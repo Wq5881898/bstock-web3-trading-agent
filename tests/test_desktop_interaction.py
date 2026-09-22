@@ -336,15 +336,15 @@ def test_mcp_account_tab_imports_only_verified_host_summary(monkeypatch, tmp_pat
         calls.append(symbol)
         return tmp_path / "verified.json", {
             "accountRef":"agentic-primary", "symbol":"BTCUSDT",
-            "canTrade":True, "availableQuote":"190.42",
-            "positionQuantity":"0.00011988", "positionCost":"9.57959880",
+            "canTrade":True, "availableQuote":"250.00",
+            "positionQuantity":"0.00023976", "positionCost":"19.15919760",
             "pendingOrderId":None, "observedAt":"2026-09-21T12:00:10Z"}
     window = create_monitor_class(lambda config: None, writer, importer)()
     try:
         window.mcp_import.click()
         assert calls == ["BTCUSDT"]
         assert "agentic-primary" in window.mcp_account_summary.text()
-        assert "190.42" in window.mcp_account_summary.text()
+        assert "250.00" in window.mcp_account_summary.text()
         assert "receipt verified" in window.mcp_status.text()
     finally:
         window.close()

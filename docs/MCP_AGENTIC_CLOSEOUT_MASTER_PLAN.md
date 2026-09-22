@@ -268,5 +268,5 @@ Gate: `MCP-AUTO-001` 至 `MCP-AUTO-010` 全部有证据；任何真实订单仍�
 | Phase 1 | 已完成 / Complete | `MCP-AUTO-001/004/005/007/008` 持久化候选会话及故障注入测试通过 / durable candidate session and fault-injection tests pass |
 | Phase 2 | 已完成 / Complete | `MCP-AUTO-002/003/005/006/008/010` 文件化确认、票据、终态/UNKNOWN及账本闭环通过 / file-safe confirmation, ticket, terminal/UNKNOWN, and ledger loop pass |
 | Phase 3 | 已完成 / Complete | 现有策略/K线/账户页加默认关闭真实MCP票据开关、确认弹窗和终态导入 / existing strategy/candle/account UI plus off-by-default live MCP ticket, confirmation and result import |
-| Phase 4 | 待执行 / Pending | `MCP-AUTO-009`；所有真实订单仍需当笔确认 / all real orders still require per-action confirmation |
-| Phase 5 | 待执行 / Pending | 发布、脱敏验收与 GitHub 收尾 / release, sanitized acceptance, and GitHub closeout |
+| Phase 4 | 进行中（1/6）/ In progress (1/6) | 2026-09-22 已通过既有MCP只读核对现有Agentic账户和BTCUSDT挂单；未写入。BUY、SELL、故障演练及24小时运行仍待当笔监督 / existing Agentic account and BTCUSDT open orders revalidated read-only through the existing MCP; no write. BUY, SELL, failure drills and 24-hour run remain supervised |
+| Phase 5 | 进行中 / In progress | 脱敏验收记录已建立；完整回归、打包/启动冒烟、敏感信息扫描和GitHub同步在收尾提交中完成 / sanitized acceptance record created; full regression, package/start smoke, secret scan, and GitHub sync complete in the closeout commit |

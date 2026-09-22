@@ -42,13 +42,13 @@ def payload(req, fingerprint="2" * 64):
         "tool_results":{
             "spot.getAccount":{"accountType":"SPOT", "canTrade":True,
                 "balances":[
-                    {"asset":"BTC", "free":"0.00011988", "locked":"0"},
-                    {"asset":"USDT", "free":"190.42", "locked":"0"}]},
+                    {"asset":"BTC", "free":"0.00023976", "locked":"0"},
+                    {"asset":"USDT", "free":"250.00", "locked":"0"}]},
             "spot.getOpenOrders":[],
             "spot.myTrades":[{"id":1, "symbol":"BTCUSDT",
                 "orderId":456, "time":1_789_992_000_000,
-                "qty":"0.00012000", "quoteQty":"9.57959880",
-                "commission":"0.00000012", "commissionAsset":"BTC",
+                "qty":"0.00024000", "quoteQty":"19.15919760",
+                "commission":"0.00000024", "commissionAsset":"BTC",
                 "isBuyer":True}],
             "spot.allOrders":[{"symbol":"BTCUSDT", "orderId":456,
                 "status":"FILLED"}],
@@ -75,8 +75,8 @@ def test_first_receipt_requires_explicit_enrollment_then_pins_account():
         "requestId":req.request_id, "symbol":"BTCUSDT",
         "accountRef":"agentic-primary", "accountFingerprint":"2" * 64,
         "enrolledNow":True, "canTrade":True,
-        "availableQuote":"190.42", "positionQuantity":"0.00011988",
-        "positionCost":"9.57959880", "pendingOrderId":None,
+        "availableQuote":"250.00", "positionQuantity":"0.00023976",
+        "positionCost":"19.15919760", "pendingOrderId":None,
         "observedAt":"2026-09-21T12:00:10Z"}
     evidence = verified.to_evidence(risk_day="2026-09-21",
         risk=LocalRiskMetrics(Decimal("3.5"), 2, 1))
@@ -112,7 +112,7 @@ def test_receipt_must_match_request_lifetime_and_full_read_set(change, match):
 
 
 @pytest.mark.parametrize("key,value", [
-    ("uid", 1274302954), ("access_token", "secret"),
+    ("uid", 987654321), ("access_token", "secret"),
     ("apiKey", "secret"),
 ])
 def test_receipt_rejects_identity_and_credentials_anywhere(key, value):

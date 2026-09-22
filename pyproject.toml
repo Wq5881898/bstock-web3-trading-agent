@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bstock-web3-engine"
-version = "1.1.0"
+version = "1.2.0"
 description = "Binance bStock strategy agent with Agent OS MCP and Agentic Wallet execution bridges"
 requires-python = ">=3.11"
 dependencies = [

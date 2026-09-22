@@ -12,12 +12,12 @@ from bstock_web3.spot_equity_risk import EquityRiskResult
 def fixture():
     return dict(
         account={"uid":123, "accountType":"SPOT", "canTrade":True,
-            "balances":[{"asset":"BTC", "free":"0.00011988", "locked":"0"},
-                        {"asset":"USDT", "free":"190.42", "locked":"0"}]},
+            "balances":[{"asset":"BTC", "free":"0.00023976", "locked":"0"},
+                        {"asset":"USDT", "free":"250.00", "locked":"0"}]},
         open_orders=[],
         trades=[{"symbol":"BTCUSDT", "orderId":456, "time":1000,
-            "qty":"0.00012000", "quoteQty":"9.57959880",
-            "commission":"0.00000012", "commissionAsset":"BTC",
+            "qty":"0.00024000", "quoteQty":"19.15919760",
+            "commission":"0.00000024", "commissionAsset":"BTC",
             "isBuyer":True}],
         all_orders=[{"symbol":"BTCUSDT", "orderId":456, "status":"FILLED"}],
         book={"symbol":"BTCUSDT", "bidPrice":"79800", "askPrice":"79801"},
@@ -30,9 +30,9 @@ def fixture():
 def test_real_shape_reconciles_fee_adjusted_position_and_cost():
     result = build_mcp_spot_evidence(**fixture())
     assert result.to_snapshot().reconciled and result.can_trade
-    assert result.available_quote == Decimal("190.42")
-    assert result.position_quantity == Decimal("0.00011988")
-    assert result.position_cost == Decimal("9.57959880")
+    assert result.available_quote == Decimal("250.00")
+    assert result.position_quantity == Decimal("0.00023976")
+    assert result.position_cost == Decimal("19.15919760")
 
 
 def test_wrong_agentic_account_is_rejected():

@@ -63,12 +63,12 @@ it is **not an unattended live-trading release**.
 | 策略页 / Strategies | MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / MTF EMA, tick Median, fixed/guarded/Auto/Adaptive Range | 全部仅模拟改参 / Editing is paper-only |
 | Median | 公共逐笔分页、SQLite事务模拟账本、重启停买和桌面参数 / Public trade pagination, transactional SQLite paper ledger, restart BUY latch and desktop inputs | 桌面模拟可用；真实行情成交尚待验证 / Desktop paper available; public-market fills remain unverified |
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
-| 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 纯本地闸门；尚未连接真实MCP / Local gate only; not wired to live MCP |
+| 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 已接持久MCP候选会话；真实写入仍逐笔确认 / Wired to the durable MCP candidate session; real writes remain per-action confirmed |
 | MCP持久化策略会话 / Durable MCP strategy session | 固定账户/标的/策略/风控绑定，信号幂等、停买保留SELL、停止和崩溃恢复 / Immutable account/symbol/strategy/risk binding, signal idempotency, SELL-preserving BUY latch, stop and crash recovery | [离线核心通过](docs/MCP_DURABLE_SESSION.md)；只生成候选，不提交 / Offline core accepted; candidate-only, no submission |
 | MCP会话确认闭环 / MCP session confirmation loop | 持久候选、七项预检、精确确认、一次性票据、终态/UNKNOWN回执、账本优先导入 / Durable candidate, seven-read preflight, exact confirmation, one-shot ticket, terminal/UNKNOWN receipt, ledger-first import | [离线闭环通过](docs/MCP_SESSION_EXECUTION.md)；真实写调用仍由宿主逐笔确认 / Offline loop accepted; real writes remain host-confirmed |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
-| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
-| MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；宿主网络接线待完成 / Strict import and recovery accepted offline; host network wiring pending |
+| MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接与桌面真实票据均已离线验收 / File handoff and desktop live-ticket flow accepted offline |
+| MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；由既有Codex MCP宿主消费票据 / Strict import and recovery accepted offline; the existing Codex MCP host consumes tickets |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
 | 桌面逐笔确认演练 / Desktop confirmation rehearsal | 已核验回执+候选计划的只读演练、账户/方向/精确金额、一次性短语、15秒过期、不可提交报告 / Read-only rehearsal from a verified receipt plus candidate, exact account/side/amount, one-time phrase, 15-second expiry and non-dispatchable report | [演练已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；始终不可提交 / Rehearsal accepted offline; always non-dispatchable |
 | 桌面真实MCP票据 / Desktop live MCP ticket | 默认关闭总开关、新鲜回执门禁、15秒精确确认、一次性票据和终态导入 / Off-by-default switch, fresh-receipt gate, exact 15-second confirmation, one-shot ticket and terminal import | [文件化界面闭环通过](docs/DESKTOP_LIVE_MCP.md)；桌面不直接调用MCP / File-safe UI loop accepted; desktop never calls MCP directly |
@@ -115,6 +115,8 @@ market snapshot and do not trigger additional wallet calls or orders.
   Agent OS MCP completed one real read-only BTCUSDT account, balance, order, fill, commission, rule and book reconciliation; no write tool was called.
 - 2026-09-21，新回执格式也已通过真实闭环：无凭据请求、账户指纹绑定、完整分页、脱敏回执和严格导入均成功；运行时账户数据未进入Git。<br>
   On 2026-09-21, the new receipt format also passed a live loop: credential-free request, account fingerprint binding, complete pagination, sanitized receipt and strict import all succeeded; runtime account data was not committed.
+- 2026-09-22，当前任务通过既有`binance-agent-os`连接再次完成账户和BTCUSDT挂单只读核对；命中既有Agentic账户、交易权限正常、持有USDT与BTC且无BTCUSDT挂单，未触发写操作。见[脱敏实盘验收记录](docs/MCP_LIVE_ACCEPTANCE_20260922.md)。<br>
+  On 2026-09-22, the current task revalidated the existing Agentic account and BTCUSDT open orders through the existing `binance-agent-os` connection. Trading was enabled, USDT and BTC were present, no BTCUSDT order was open, and no write was invoked. See the [sanitized live acceptance record](docs/MCP_LIVE_ACCEPTANCE_20260922.md).
 - **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Codex宿主结果自动回传、
   策略到MCP人工确认订单的持续实盘验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
@@ -215,12 +217,13 @@ bstock-engine --symbol NVDAB --mode paper --amount 20 --once
 bstock-desktop
 ```
 
-窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”和“账户 / Account”。可选择MTF EMA、逐笔Median或固定/防御/Auto/Adaptive Range，检查金额与风控后启动。各逐笔策略使用独立模拟资金；GUI没有真实下单开关。<br>
+窗口包含“监控 / Monitor”“K线 / Candles”“策略 / Strategies”和“账户 / Account”。可选择MTF EMA、逐笔Median或固定/防御/Auto/Adaptive Range，检查金额与风控后启动。各逐笔策略使用独立模拟资金；账户页有默认关闭的真实MCP票据开关，它只生成限时一次性票据，桌面本身不直接调用MCP。<br>
 The window has Monitor, Candles, Strategies and Account tabs. Select default/custom MTF EMA,
 tick Median, or fixed/guarded/Auto/Adaptive Range, review budget/risk inputs, then start.
 Each tick strategy uses separate simulated funds. The Account tab exports/imports the
-Codex MCP read boundary and can run a dispatch-prohibited candidate rehearsal; the GUI
-has no live-order switch, `spot.newOrder` call or OAuth login.
+Codex MCP read boundary and exposes an off-by-default live-ticket switch. It emits only
+an expiring one-shot ticket after exact confirmation; the desktop never calls
+`spot.newOrder` directly and never starts OAuth.
 
 本地合成桌面验收（不连接账户，结果保存在被Git忽略的`runtime/`目录）：<br>
 Local synthetic desktop acceptance (no account connection; output stays in git-ignored `runtime/`):
@@ -310,16 +313,16 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 
 ## 当前代码状态 / Current Code Status
 
-- 包版本 / Package version: `v1.1.0`（本轮为开发更新，未新建Release标签 / development update; no new release tag）
-- 本地自动化测试 / Local automated tests: `442 passed`
+- 包版本 / Package version: `v1.2.0`（MCP-only收尾候选；尚未新建Release标签 / MCP-only closeout candidate; no release tag yet）
+- 本地自动化测试 / Local automated tests: `470 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance
 - 执行适配器 / Execution adapters:
   - Agent OS MCP 宿主交接 / Agent OS MCP host handoff
   - Agentic Wallet 安全执行 / guarded Agentic Wallet execution
-- 实盘前仍需人工确认并进行最小金额验收测试。<br>
-  Live use still requires operator confirmation and minimum-size acceptance testing.
+- 实盘只读账户复核已通过；仍待逐笔确认的最小策略BUY、策略SELL和24小时监督运行。<br>
+  Live account readback passes; a per-action-confirmed minimum strategy BUY, strategy SELL, and 24-hour supervised run remain.
 
 ## 项目范围与免责声明 / Scope and Disclaimer
 
