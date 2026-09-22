@@ -93,7 +93,8 @@ def import_mcp_host_receipt(symbol: str):
 
 
 def create_monitor_class(engine_factory=None, bridge_writer=None,
-                         receipt_importer=None, rehearsal_loader=None):
+                         receipt_importer=None, rehearsal_loader=None,
+                         live_loader=None):
     """Keep Qt optional for CLI users and permit deterministic desktop tests."""
     from PyQt5 import QtCore, QtWidgets
     from .candle_widget import CandlePanel
@@ -122,6 +123,12 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             return prepare_desktop_rehearsal(
                 mcp_plan_file(symbol), receipt, mcp_request_file(symbol).parent,
                 daily_equity_loss=daily_equity_loss)
+    if live_loader is None:
+        from .mcp_desktop_live import prepare_desktop_live_handoff
+        def live_loader(symbol, receipt, daily_equity_loss):
+            return prepare_desktop_live_handoff(
+                mcp_plan_file(symbol), receipt, mcp_request_file(symbol).parent,
+                daily_equity_loss=daily_equity_loss)
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -135,6 +142,7 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             self.order_prompts = []
             self.mcp_verified_receipt = None
             self.mcp_rehearsal_session = None
+            self.mcp_live_session = None
             self.result_timer = QtCore.QTimer(self)
             self.result_timer.timeout.connect(self.collect)
             self.result_timer.start(100)
@@ -172,7 +180,8 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             controls.addWidget(self.start)
             top_layout.addLayout(controls)
             layout.addWidget(top)
-            self.status = QtWidgets.QLabel("安全状态：未运行。GUI V1 不提供实盘提交按钮。")
+            self.status = QtWidgets.QLabel(
+                "安全状态：未运行。桌面不直接提交真实交易；MCP票据默认关闭。")
             layout.addWidget(self.status)
             limits = QtWidgets.QHBoxLayout()
             self.risk_inputs = {}
@@ -364,6 +373,18 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 "载入候选并演练 / Load candidate rehearsal")
             self.mcp_rehearse.setEnabled(False)
             self.mcp_rehearse.clicked.connect(self.load_mcp_rehearsal)
+            self.mcp_live_enabled = QtWidgets.QCheckBox(
+                "启用真实MCP票据 / Enable live MCP ticket")
+            self.mcp_live_enabled.setChecked(False)
+            self.mcp_live_enabled.toggled.connect(self.update_mcp_live_controls)
+            self.mcp_live_prepare = QtWidgets.QPushButton(
+                "载入真实候选 / Load live candidate")
+            self.mcp_live_prepare.setEnabled(False)
+            self.mcp_live_prepare.clicked.connect(self.load_mcp_live)
+            self.mcp_live_import = QtWidgets.QPushButton(
+                "导入真实终态 / Import live result")
+            self.mcp_live_import.setEnabled(False)
+            self.mcp_live_import.clicked.connect(self.import_mcp_live_result)
             self.mcp_rehearsal_loss = QtWidgets.QDoubleSpinBox()
             self.mcp_rehearsal_loss.setRange(0, 100000)
             self.mcp_rehearsal_loss.setDecimals(8)
@@ -378,6 +399,9 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 "演练累计亏损 / Rehearsal loss"))
             mcp_row.addWidget(self.mcp_rehearsal_loss)
             mcp_row.addWidget(self.mcp_rehearse)
+            mcp_row.addWidget(self.mcp_live_enabled)
+            mcp_row.addWidget(self.mcp_live_prepare)
+            mcp_row.addWidget(self.mcp_live_import)
             mcp_row.addStretch(1)
             account_layout.addLayout(mcp_row)
             self.mcp_status = QtWidgets.QLabel(
@@ -391,10 +415,10 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             self.mcp_account_summary.setWordWrap(True)
             account_layout.addWidget(self.mcp_account_summary)
             self.mcp_live_status = QtWidgets.QLabel(
-                "现有Agentic账户不会在这里重新创建或重新授权；真实提交入口保持禁用。\n"
-                "This page never recreates or reauthorizes the existing Agentic account; live submission disabled.\n"
-                "演练只生成 dispatch_prohibited 凭据，不调用 spot.newOrder。\n"
-                "Rehearsal writes a dispatch-prohibited artifact and never calls spot.newOrder.")
+                "现有Agentic账户不会在这里重新创建或重新授权；真实票据默认关闭。\n"
+                "This page never recreates or reauthorizes the existing Agentic account; live submission disabled by default.\n"
+                "启用后仍只生成一次性文件；实际MCP写调用由Codex宿主逐笔确认执行。\n"
+                "Enabling it still creates a one-shot file only; Codex performs each confirmed MCP write.")
             self.mcp_live_status.setObjectName("mcpLiveStatus")
             self.mcp_live_status.setWordWrap(True)
             account_layout.addWidget(self.mcp_live_status)
@@ -667,6 +691,7 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 path, summary = imported[:2]
                 self.mcp_verified_receipt = imported[2] if len(imported) == 3 else None
                 self.mcp_rehearse.setEnabled(self.mcp_verified_receipt is not None)
+                self.update_mcp_live_controls()
                 self.mcp_account_summary.setText(
                     f"{summary['accountRef']} · {summary['symbol']} · "
                     f"canTrade={summary['canTrade']}\n"
@@ -681,6 +706,7 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             except Exception as exc:
                 self.mcp_verified_receipt = None
                 self.mcp_rehearse.setEnabled(False)
+                self.update_mcp_live_controls()
                 self.mcp_account_summary.setText(
                     "本次无有效Codex快照 / No valid Codex snapshot from this attempt")
                 self.mcp_status.setText(
@@ -734,6 +760,99 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
             self.mcp_status.setText(
                 "演练已取消；未调用MCP / Rehearsal cancelled; no MCP call occurred")
 
+        def update_mcp_live_controls(self):
+            ready = (self.mcp_live_enabled.isChecked()
+                     and self.mcp_verified_receipt is not None
+                     and self.mcp_live_session is None)
+            self.mcp_live_prepare.setEnabled(ready)
+            if not self.mcp_live_enabled.isChecked():
+                self.mcp_live_status.setText(
+                    "真实MCP票据：关闭（默认）/ Live MCP ticket: OFF (default)\n"
+                    "不会创建API Key、账户或订单票据。 / No API key, account, or order ticket is created.")
+            elif self.mcp_verified_receipt is None:
+                self.mcp_live_status.setText(
+                    "真实MCP票据：等待严格核验的账户回执。\n"
+                    "Live MCP ticket: waiting for a strictly verified account receipt.")
+            elif self.mcp_live_session is None:
+                self.mcp_live_status.setText(
+                    "真实MCP票据：已启用；载入候选后仍需15秒内逐字确认。\n"
+                    "Live MCP ticket: enabled; loading a candidate still requires exact confirmation within 15 seconds.")
+
+        def load_mcp_live(self):
+            if (not self.mcp_live_enabled.isChecked()
+                    or self.mcp_verified_receipt is None
+                    or self.mcp_live_session is not None):
+                self.update_mcp_live_controls()
+                return
+            symbol = self.mcp_symbol.text().strip().upper()
+            try:
+                session = live_loader(symbol, self.mcp_verified_receipt,
+                    Decimal(str(self.mcp_rehearsal_loss.value())))
+                self.mcp_live_session = session
+                self.mcp_live_prepare.setEnabled(False)
+                self.mcp_live_status.setText(
+                    "真实候选已通过本地预检；请在15秒内逐字确认。此时尚未调用MCP。\n"
+                    "Live candidate passed local preflight; confirm exactly within 15 seconds. MCP has not been called.")
+                self.show_confirmed_order_prompt(
+                    session.preview, self._confirm_mcp_live,
+                    self._cancel_mcp_live)
+            except Exception as exc:
+                self.mcp_live_session = None
+                self.mcp_live_status.setText(
+                    f"载入真实候选失败 / Live candidate preparation failed: {exc}")
+                self.update_mcp_live_controls()
+
+        def _confirm_mcp_live(self, phrase):
+            session = self.mcp_live_session
+            if session is None:
+                return
+            try:
+                ticket_path, ticket, result_path = session.confirm(phrase)
+                self.mcp_live_import.setEnabled(True)
+                self.mcp_live_status.setText(
+                    f"一次性真实票据已生成：{ticket_path}\n"
+                    f"Codex宿主终态回执位置：{result_path}\n"
+                    "请只让当前已授权Codex任务消费一次；本桌面没有直接调用MCP。\n"
+                    f"One-shot ticket ready for {ticket.symbol}; desktop made no direct MCP call.")
+            except Exception as exc:
+                self.mcp_live_session = None
+                self.mcp_live_import.setEnabled(False)
+                self.mcp_live_status.setText(
+                    f"真实确认失败 / Live confirmation failed: {exc}")
+                self.update_mcp_live_controls()
+
+        def _cancel_mcp_live(self):
+            session, self.mcp_live_session = self.mcp_live_session, None
+            if session is not None:
+                try:
+                    session.cancel()
+                except RuntimeError as exc:
+                    self.mcp_live_session = session
+                    self.mcp_live_status.setText(str(exc))
+                    return
+            self.mcp_live_import.setEnabled(False)
+            self.mcp_live_status.setText(
+                "真实候选已取消；未生成票据、未调用MCP。\n"
+                "Live candidate cancelled; no ticket and no MCP call.")
+            self.update_mcp_live_controls()
+
+        def import_mcp_live_result(self):
+            session = self.mcp_live_session
+            if session is None:
+                return
+            try:
+                imported = session.import_result()
+                self.mcp_live_status.setText(
+                    f"真实终态已严格导入：{imported.phase.value}\n"
+                    "成交账本已先写入；会话可继续。\n"
+                    "Live terminal result imported; fill ledger committed first.")
+                self.mcp_live_session = None
+                self.mcp_live_import.setEnabled(False)
+                self.update_mcp_live_controls()
+            except Exception as exc:
+                self.mcp_live_status.setText(
+                    f"导入真实终态失败 / Live result import failed: {exc}")
+
         def show_confirmed_order_prompt(self, preview, on_confirmed, on_cancelled,
                                         *, clock_ms=None):
             """Present an injected prepared order; never creates a live session."""
@@ -780,6 +899,12 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 dialog.reject()
             if self.mcp_rehearsal_session is not None:
                 self._cancel_mcp_rehearsal()
+            if self.mcp_live_session is not None:
+                live, self.mcp_live_session = self.mcp_live_session, None
+                if getattr(live, "ticket", None) is None:
+                    live.cancel()
+                else:
+                    live.close()
             if self.runner is not None:
                 self.closing = True
                 self.timer.stop()

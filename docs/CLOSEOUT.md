@@ -39,13 +39,13 @@ Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) 
 ## 尚待完成 / Remaining
 
 1. `MCP-AUTO-001/004/005/007/008` 的持久化候选会话和故障注入已经通过离线验收。
-2. `MCP-AUTO-002/003/006` 的候选、宿主预检、当笔确认、一次性票据、终态/UNKNOWN和账本导入已完成离线闭环；桌面操作接线及真实宿主验收仍待完成。
+2. `MCP-AUTO-002/003/006` 的候选、宿主预检、当笔确认、一次性票据、终态/UNKNOWN、账本导入和桌面操作接线已完成离线闭环；真实宿主验收仍待完成。真实开关默认关闭，并使用新鲜回执门禁。
 3. `MCP-AUTO-009`：完成一笔经确认的策略 BUY、一笔经确认的策略 SELL，以及 24 小时小额监督运行。
 4. `MCP-AUTO-010`：保持 MCP-only 架构守卫持续通过。
 5. 多标的、Futures、Telegram 和其他外围功能不属于本次收尾阻塞项。
 
 1. The durable candidate session and fault injection for `MCP-AUTO-001/004/005/007/008` pass offline acceptance.
-2. The candidate, host preflight, per-action confirmation, one-shot ticket, terminal/UNKNOWN, and ledger import flow for `MCP-AUTO-002/003/006` passes offline; desktop wiring and real-host acceptance remain.
+2. The candidate, host preflight, per-action confirmation, one-shot ticket, terminal/UNKNOWN, ledger import, and desktop wiring for `MCP-AUTO-002/003/006` pass offline. The live switch is off by default and gated by a fresh receipt; real-host acceptance remains.
 3. `MCP-AUTO-009`: one confirmed strategy BUY, one confirmed strategy SELL, and a 24-hour supervised small-balance run.
 4. `MCP-AUTO-010`: keep the MCP-only architecture guard passing.
 5. Multi-symbol, Futures, Telegram, and peripheral work do not block this closeout.

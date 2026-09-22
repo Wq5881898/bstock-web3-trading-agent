@@ -140,3 +140,62 @@ def test_account_tab_runs_only_injected_non_dispatchable_rehearsal(
         assert window.mcp_rehearsal_session is None
     finally:
         window.close()
+
+
+def test_live_mcp_switch_is_off_by_default_and_uses_file_handoff(
+        monkeypatch, tmp_path):
+    monkeypatch.setenv("BINANCE_AGENT_RUNTIME_DIR", str(tmp_path))
+    app = QtWidgets.QApplication.instance()
+    events = []
+    receipt = object()
+    summary = {"accountRef":"agentic-primary", "symbol":"BTCUSDT",
+        "canTrade":True, "availableQuote":"100", "positionQuantity":"0",
+        "positionCost":"0", "pendingOrderId":None,
+        "observedAt":"2026-09-21T12:00:10Z"}
+    live_preview = preview(expiresAtMs=int(time.time() * 1000) + 15_000)
+
+    class LiveSession:
+        preview = live_preview
+        ticket = None
+        def confirm(self, phrase):
+            events.append(("confirm-live", phrase))
+            self.ticket = SimpleNamespace(symbol="BTCUSDT")
+            return (tmp_path / "ticket.json", self.ticket,
+                    tmp_path / "result.json")
+        def import_result(self):
+            events.append(("import-live",))
+            return SimpleNamespace(phase=SimpleNamespace(value="FILLED"))
+        def cancel(self):
+            events.append(("cancel-live",))
+        def close(self):
+            events.append(("close-live",))
+
+    def importer(symbol):
+        return tmp_path / "verified.json", summary, receipt
+    def live_loader(symbol, verified, loss):
+        events.append(("load-live", symbol, verified, str(loss)))
+        return LiveSession()
+
+    window = create_monitor_class(
+        lambda config: None, None, importer, None, live_loader)()
+    window.show()
+    try:
+        assert not window.mcp_live_enabled.isChecked()
+        assert not window.mcp_live_prepare.isEnabled()
+        window.mcp_import.click()
+        assert not window.mcp_live_prepare.isEnabled()
+        window.mcp_live_enabled.setChecked(True)
+        assert window.mcp_live_prepare.isEnabled()
+        window.mcp_live_prepare.click(); app.processEvents()
+        dialog = window.order_prompts[0]
+        dialog.input.setText(LiveSession.preview["confirmation"])
+        dialog.confirm_button.click(); app.processEvents()
+        assert events[:2] == [
+            ("load-live", "BTCUSDT", receipt, "0.0"),
+            ("confirm-live", LiveSession.preview["confirmation"])]
+        assert window.mcp_live_import.isEnabled()
+        window.mcp_live_import.click(); app.processEvents()
+        assert events[-1] == ("import-live",)
+        assert window.mcp_live_session is None
+    finally:
+        window.close()

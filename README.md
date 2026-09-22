@@ -70,7 +70,8 @@ it is **not an unattended live-trading release**.
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接已离线验收；未接桌面真实提交 / File handoff accepted offline; no desktop live submission |
 | MCP终态回执 / MCP terminal receipt | 绑定票据/账户/订单的脱敏回执，终态查单、完整分页、余额/订单/成交交叉核对，先写成交账本再推进执行日志 / Sanitized ticket/account/order-bound receipt, terminal lookup, complete pagination, cross-reconciliation, fill-ledger-first journal transition | 严格导入与故障恢复已离线验收；宿主网络接线待完成 / Strict import and recovery accepted offline; host network wiring pending |
 | MCP宿主校验边界 / MCP host validation boundary | 工具白名单、双层参数校验、运行时schema门禁和同会话读取 / Tool allowlist, two-layer argument checks, runtime schema gate and same-session reads | 真实`newOrder/getOrder` schema已只读验收；未调用写工具 / Live schemas accepted read-only; no write tool invoked |
-| 桌面逐笔确认 / Desktop per-order confirmation | 已核验回执+候选计划的只读演练、账户/方向/精确金额、一次性短语、15秒过期、不可提交报告 / Read-only rehearsal from a verified receipt plus candidate, exact account/side/amount, one-time phrase, 15-second expiry and non-dispatchable report | [界面演练已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；真实提交入口保持禁用 / UI rehearsal accepted offline; live submission remains disabled |
+| 桌面逐笔确认演练 / Desktop confirmation rehearsal | 已核验回执+候选计划的只读演练、账户/方向/精确金额、一次性短语、15秒过期、不可提交报告 / Read-only rehearsal from a verified receipt plus candidate, exact account/side/amount, one-time phrase, 15-second expiry and non-dispatchable report | [演练已离线验收](docs/DESKTOP_ORDER_CONFIRMATION.md)；始终不可提交 / Rehearsal accepted offline; always non-dispatchable |
+| 桌面真实MCP票据 / Desktop live MCP ticket | 默认关闭总开关、新鲜回执门禁、15秒精确确认、一次性票据和终态导入 / Off-by-default switch, fresh-receipt gate, exact 15-second confirmation, one-shot ticket and terminal import | [文件化界面闭环通过](docs/DESKTOP_LIVE_MCP.md)；桌面不直接调用MCP / File-safe UI loop accepted; desktop never calls MCP directly |
 | Codex MCP交接 / Codex MCP handoff | 无凭据读取请求、脱敏回执、账户指纹绑定、订单计划和严格对账 / Credential-free reads, sanitized receipts, account binding, order plans and strict reconciliation | [纠正后的架构](docs/MCP_HOST_BRIDGE.md) / Corrected architecture |
 | Spot成交账本 / Spot fill ledger | 成交ID幂等、基础/报价手续费、移动平均成本、已实现盈亏、锁与原子检查点 / Idempotent fills, base/quote fees, average cost, realized PnL and locked atomic checkpoints | [离线模块](docs/SPOT_FILL_LEDGER.md)；真实宿主接线未完成 / Offline module; live-host wiring pending |
 | Spot权益风险 / Spot equity risk | UTC基准、买一价估值、资金流调整，以及成交推导的开仓/连亏计数 / UTC baselines, best-bid valuation, cash-flow adjustment and fill-derived entry/loss counters | [离线模块](docs/SPOT_EQUITY_RISK.md)；完整资金流水源和桌面编排未完成 / Offline module; complete cash-flow source and desktop orchestration pending |
@@ -153,6 +154,7 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [MCP文件化执行交接 / MCP file-safe execution handoff](docs/MCP_EXECUTION_HANDOFF.md) ·
 [MCP持久化策略会话 / Durable MCP strategy session](docs/MCP_DURABLE_SESSION.md) ·
 [MCP会话确认闭环 / MCP session confirmation loop](docs/MCP_SESSION_EXECUTION.md) ·
+[桌面真实MCP票据 / Desktop live MCP ticket](docs/DESKTOP_LIVE_MCP.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
 [MCP + Agentic收尾总计划 / Closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) ·

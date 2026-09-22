@@ -267,6 +267,6 @@ Gate: `MCP-AUTO-001` 至 `MCP-AUTO-010` 全部有证据；任何真实订单仍�
 | Phase 0 | 已完成 / Complete | API Key/私有 REST 路线、入口和测试已撤回；MCP-only 架构守卫及完整回归通过 / API-key/private-REST route, entry point, and tests removed; MCP-only guard and full regression pass |
 | Phase 1 | 已完成 / Complete | `MCP-AUTO-001/004/005/007/008` 持久化候选会话及故障注入测试通过 / durable candidate session and fault-injection tests pass |
 | Phase 2 | 已完成 / Complete | `MCP-AUTO-002/003/005/006/008/010` 文件化确认、票据、终态/UNKNOWN及账本闭环通过 / file-safe confirmation, ticket, terminal/UNKNOWN, and ledger loop pass |
-| Phase 3 | 待执行 / Pending | 最小操作界面 / Minimum operator UI |
+| Phase 3 | 已完成 / Complete | 现有策略/K线/账户页加默认关闭真实MCP票据开关、确认弹窗和终态导入 / existing strategy/candle/account UI plus off-by-default live MCP ticket, confirmation and result import |
 | Phase 4 | 待执行 / Pending | `MCP-AUTO-009`；所有真实订单仍需当笔确认 / all real orders still require per-action confirmation |
 | Phase 5 | 待执行 / Pending | 发布、脱敏验收与 GitHub 收尾 / release, sanitized acceptance, and GitHub closeout |
