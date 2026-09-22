@@ -1,5 +1,9 @@
 # 当前收尾状态 / Current closeout status
 
+产品收尾目标和验收优先服从[自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)。逐笔确认、票据和桌面演练是诊断安全组件，不是最终业务流程。
+
+Closeout is governed by the [Autonomous Trading Product Baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md). Per-order confirmation, tickets and desktop rehearsal are diagnostic safety components, not the final product flow.
+
 ## 已完成 / Delivered
 
 - 统一策略注册表和Spot/Web3/Futures适用标签；MTF、Median和Range家族共用接口，Slope未加入。
@@ -34,16 +38,16 @@ The desktop was previously and incorrectly treated as a new Binance OAuth Agent.
 
 ## 尚待验收 / Remaining acceptance
 
-1. Codex宿主自动拾取请求/返回回执的持续编排。
-2. 策略信号、风险闸门、宿主确认、最小订单、终态和账本回写的完整闭环。
-3. 持续真实行情/断线恢复和桌面长时运行。
-4. 多币种真实账户级风险；当前仍按单标的原型失败关闭。
+1. 决定满足`AUTO-002`的长期执行宿主；当前Codex MCP宿主要求非GET操作逐笔确认。
+2. 一次启动后的策略信号、风控、自动下单/平仓、终态和账本回写闭环。
+3. 单标的24小时小额实盘、断线和恢复验收。
+4. 多币种、Futures和其他外围功能不属于本次收尾阻塞项。
 
-1. Sustained orchestration for Codex to pick up requests and return receipts automatically.
-2. Full signal/risk/host-confirmation/minimum-order/terminal-state/ledger loop.
-3. Sustained live data, reconnect recovery and long-running desktop acceptance.
-4. Multi-symbol live account risk; the current prototype remains fail-closed for one symbol.
+1. Select a long-running execution host that can satisfy `AUTO-002`; the current Codex MCP host requires confirmation before non-GET operations.
+2. Complete the once-started signal/risk/automatic entry-exit/terminal/ledger loop.
+3. Pass a 24-hour small single-symbol live, disconnect and recovery acceptance run.
+4. Multi-symbol, Futures and other peripheral work do not block this closeout.
 
-任何API Key或其他无人值守接口都不在当前授权范围，必须先讨论并取得用户明确允许。
+API Key路线不在当前授权范围。若MCP无法满足`AUTO-002`，必须停止并先讨论、取得用户明确允许；不能把产品目标降级为逐笔确认。
 
-Any API-key or other unattended interface is outside current authorization and requires prior discussion and explicit user approval.
+The API-key route remains unauthorized. If MCP cannot satisfy `AUTO-002`, stop and obtain explicit approval before proceeding; do not downgrade the product to per-order confirmation.

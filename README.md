@@ -16,6 +16,10 @@
 本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认模式为模拟盘，
 不会自动调用 MCP、钱包或执行真实交易。
 
+最终产品目标是：用户一次启动后，由选定策略在绑定的Agentic Spot账户中持续自动交易，直到用户结束；逐笔确认只属于诊断/最小金额验收模式。范围、状态机、验收条件及当前MCP宿主阻塞以[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)为最高优先级依据。
+
+The final product goal is a once-started, strategy-driven autonomous session on the bound Agentic Spot account, running until the operator stops it. Per-order confirmation is diagnostic/minimum-size acceptance mode only. The [Autonomous Trading Product Baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) is the highest-priority source for scope, lifecycle, acceptance and the current MCP-host blocker.
+
 ## 核心功能 / Key Features
 
 - Binance 公共 bStock 目录、合约地址和实时市场状态发现。<br>
