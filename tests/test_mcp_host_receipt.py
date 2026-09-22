@@ -7,8 +7,8 @@ from bstock_web3.mcp_bridge import (MCP_SPOT_READ_TOOLS,
     McpAccountBinding, build_mcp_spot_read_request,
     load_mcp_account_binding, load_mcp_read_request,
     write_mcp_account_binding, write_mcp_read_request)
-from bstock_web3.mcp_host_receipt import (verify_spot_host_receipt,
-    write_verified_receipt)
+from bstock_web3.mcp_host_receipt import (load_verified_receipt,
+    verify_spot_host_receipt, write_verified_receipt)
 from bstock_web3.mcp_spot_snapshot import LocalRiskMetrics
 
 
@@ -146,6 +146,12 @@ def test_binding_request_and_verified_receipt_round_trip(tmp_path):
     contents = output_path.read_text(encoding="utf-8")
     assert '"status": "VERIFIED"' in contents
     assert "uid" not in contents.lower() and "access_token" not in contents.lower()
+    restored = load_verified_receipt(output_path, original)
+    assert restored.summary() == verified.summary()
+
+    changed = binding("3" * 64)
+    with pytest.raises(ValueError, match="binding mismatch"):
+        load_verified_receipt(output_path, changed)
 
 
 def test_document_tampering_and_binding_replacement_fail_closed(tmp_path):

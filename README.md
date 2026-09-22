@@ -24,6 +24,8 @@ The final product goal is a once-started session that continuously reads markets
 
 - Binance 公共 bStock 目录、合约地址和实时市场状态发现。<br>
   Public Binance bStock catalog, contract-address and live market-status discovery.
+- Binance 交易所 Spot 公共标的发现和 1m/5m K 线观察；当前 MCP 原型使用 `BTCUSDT`。<br>
+  Public Binance exchange Spot discovery and 1m/5m observation; the current MCP prototype uses `BTCUSDT`.
 - 支持断点续传的 Binance bStock Spot 秒级历史数据，以及 1m/5m K 线聚合。<br>
   Resumable Binance bStock Spot one-second history with 1m/5m candle aggregation.
 - 本地多周期策略：5 分钟 EMA 判断趋势，1 分钟 EMA 产生执行信号。<br>
@@ -65,6 +67,7 @@ it is **not an unattended live-trading release**.
 | Range家族 / Range family | 固定EMA/Median、EMA/P90防御、EMA Guarded、Auto、Guarded Auto、Median Adaptive；事务恢复与持仓参数锁定 / Fixed EMA/Median, EMA/P90 Guarded, EMA Guarded, Auto, Guarded Auto, Median Adaptive; transactional restore and position-parameter locking | 桌面模拟可用；Slope不加入 / Desktop paper available; Slope excluded |
 | 自动执行风控契约 / Automation policy | 单笔100、累计亏损10停买、卖出信号继续、手动恢复及弹窗去重事件 / 100-unit entries, 10-unit cumulative-loss BUY latch, continued exits, manual resume and deduplicated popup event | 已接持久MCP候选会话；真实写入仍逐笔确认 / Wired to the durable MCP candidate session; real writes remain per-action confirmed |
 | MCP持久化策略会话 / Durable MCP strategy session | 固定账户/标的/策略/风控绑定，信号幂等、停买保留SELL、停止和崩溃恢复 / Immutable account/symbol/strategy/risk binding, signal idempotency, SELL-preserving BUY latch, stop and crash recovery | [离线核心通过](docs/MCP_DURABLE_SESSION.md)；只生成候选，不提交 / Offline core accepted; candidate-only, no submission |
+| 交易所Spot长期观察 / Exchange Spot observer | `BTCUSDT`公开1m/5m K线、真实本地持仓视图、闭合K线去重和重启恢复 / Public `BTCUSDT` 1m/5m candles, locally verified position view, closed-bar deduplication and restart recovery | [只观察运行中](docs/EXCHANGE_SPOT_OBSERVER.md)；无执行通道 / Observe-only running; no execution transport |
 | MCP会话确认闭环 / MCP session confirmation loop | 持久候选、七项预检、精确确认、一次性票据、终态/UNKNOWN回执、账本优先导入 / Durable candidate, seven-read preflight, exact confirmation, one-shot ticket, terminal/UNKNOWN receipt, ledger-first import | [离线闭环通过](docs/MCP_SESSION_EXECUTION.md)；真实写调用仍由宿主逐笔确认 / Offline loop accepted; real writes remain host-confirmed |
 | MCP执行安全契约 / MCP execution safety | 四项必需只读核对、限时账户绑定、跨进程锁、确定性客户端订单ID、原子日志及UNKNOWN只查单恢复 / Four required read-only checks, expiring account binding, cross-process lock, deterministic client order ID, atomic journal and lookup-only UNKNOWN recovery | 离线契约和测试可用；没有生产下单调用 / Offline contract and tests available; no production order call |
 | MCP逐笔确认执行器 / Per-order-confirmed MCP executor | 精确确认、15秒有效期、提交前重核、原子SUBMITTING、单次提交票据及UNKNOWN只查单 / Exact confirmation, 15-second expiry, pre-submit checks, durable SUBMITTING, one-shot ticket and lookup-only UNKNOWN | 文件交接与桌面真实票据均已离线验收 / File handoff and desktop live-ticket flow accepted offline |
@@ -117,6 +120,8 @@ market snapshot and do not trigger additional wallet calls or orders.
   On 2026-09-21, the new receipt format also passed a live loop: credential-free request, account fingerprint binding, complete pagination, sanitized receipt and strict import all succeeded; runtime account data was not committed.
 - 2026-09-22，当前任务通过既有`binance-agent-os`连接再次完成账户和BTCUSDT挂单只读核对；命中既有Agentic账户、交易权限正常、持有USDT与BTC且无BTCUSDT挂单，未触发写操作。见[脱敏实盘验收记录](docs/MCP_LIVE_ACCEPTANCE_20260922.md)。<br>
   On 2026-09-22, the current task revalidated the existing Agentic account and BTCUSDT open orders through the existing `binance-agent-os` connection. Trading was enabled, USDT and BTC were present, no BTCUSDT order was open, and no write was invoked. See the [sanitized live acceptance record](docs/MCP_LIVE_ACCEPTANCE_20260922.md).
+- 同日确认`NVDAB`不是Binance交易所Spot有效标的，因此不能用于Agent OS Spot订单；MCP原型改用`BTCUSDT`，NVDAB仍保留为bStock/Web3行情和钱包通道。`BTCUSDT`长期观察器已产生真实闭合K线策略信号，但明确不可执行。<br>
+  The same acceptance confirmed that `NVDAB` is not a valid Binance exchange Spot symbol, so it cannot back an Agent OS Spot order. The MCP prototype uses `BTCUSDT`; NVDAB remains on the bStock/Web3 market and wallet path. The `BTCUSDT` observer has produced real closed-candle strategy signals that are explicitly non-executable.
 - **尚未完成**：持续真实行情与成交验收、完整历史成交UI、Codex宿主结果自动回传、
   策略到MCP人工确认订单的持续实盘验收。<br>
   **Pending**: sustained public-market/fill acceptance, a complete history UI,
@@ -155,6 +160,7 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [MCP执行安全 / MCP execution safety](docs/MCP_EXECUTION_SAFETY.md) ·
 [MCP文件化执行交接 / MCP file-safe execution handoff](docs/MCP_EXECUTION_HANDOFF.md) ·
 [MCP持久化策略会话 / Durable MCP strategy session](docs/MCP_DURABLE_SESSION.md) ·
+[交易所Spot长期观察 / Exchange Spot observer](docs/EXCHANGE_SPOT_OBSERVER.md) ·
 [MCP会话确认闭环 / MCP session confirmation loop](docs/MCP_SESSION_EXECUTION.md) ·
 [桌面真实MCP票据 / Desktop live MCP ticket](docs/DESKTOP_LIVE_MCP.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
@@ -255,6 +261,18 @@ account and signal but has no final client order ID and cannot be submitted dire
 详细流程请参阅 [Agent OS MCP 双执行通道说明](docs/AGENT_OS_MCP.md)。<br>
 See [Agent OS MCP dual-execution guide](docs/AGENT_OS_MCP.md) for the complete workflow.
 
+### 启动交易所 Spot 只观察运行 / Start Exchange Spot Observe-Only Run
+
+```powershell
+bstock-spot-observe --symbol BTCUSDT `
+  --verified-snapshot runtime\desktop\mcp\btcusdt-verified-snapshot.json `
+  --binding-file runtime\desktop\mcp\account-binding.json
+```
+
+该命令持续读取公开K线，使用统一MTF策略和本地已验证持仓视图，并持久化闭合K线去重状态。输出固定为`OBSERVE_ONLY`、`execution_eligible=false`和`transport=null`；它不调用MCP、不创建票据、不下单。完整边界见[交易所Spot观察说明](docs/EXCHANGE_SPOT_OBSERVER.md)。
+
+This command continuously reads public candles, uses the unified MTF strategy plus the locally verified position view, and persists closed-bar deduplication. Output is always `OBSERVE_ONLY`, `execution_eligible=false`, and `transport=null`; it never calls MCP, creates a ticket, or submits an order. See the [Exchange Spot observer guide](docs/EXCHANGE_SPOT_OBSERVER.md).
+
 ### 下载、聚合并回放历史数据 / Download, Aggregate and Replay History
 
 ```powershell
@@ -313,8 +331,8 @@ bstock-engine --symbol NVDAB --mode live-confirmed --amount 20 `
 
 ## 当前代码状态 / Current Code Status
 
-- 包版本 / Package version: `v1.2.0`（MCP-only收尾候选；尚未新建Release标签 / MCP-only closeout candidate; no release tag yet）
-- 本地自动化测试 / Local automated tests: `470 passed`
+- 包版本 / Package version: `v1.3.0`（MCP-only交易所Spot观察候选；尚未新建Release标签 / MCP-only exchange-Spot observation candidate; no release tag yet）
+- 本地自动化测试 / Local automated tests: `480 passed`
 - 桌面策略 / Desktop strategies: 可编辑MTF EMA、逐笔Median、固定/防御/Auto/Adaptive Range / editable MTF EMA, tick Median and fixed/guarded/Auto/Adaptive Range
 - 模拟账本 / Paper ledger: Median与Range使用逐笔/资金/风险事务保存 / Median and Range commit ticks, funds and risk transactionally
 - 已验证范围 / Verified scope: 历史回放、本地模拟与合成桌面验收 / historical replay, local paper and synthetic desktop acceptance

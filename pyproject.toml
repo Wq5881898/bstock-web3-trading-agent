@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bstock-web3-engine"
-version = "1.2.0"
+version = "1.3.0"
 description = "Binance bStock strategy agent with Agent OS MCP and Agentic Wallet execution bridges"
 requires-python = ">=3.11"
 dependencies = [
@@ -25,6 +25,7 @@ bstock-desktop = "bstock_web3.desktop:main"
 bstock-mcp-plan = "bstock_web3.mcp_cli:main"
 bstock-mcp-request = "bstock_web3.mcp_request_cli:main"
 bstock-mcp-import = "bstock_web3.mcp_import_cli:main"
+bstock-spot-observe = "bstock_web3.spot_observer:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

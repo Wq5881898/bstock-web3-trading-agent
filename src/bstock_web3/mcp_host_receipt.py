@@ -218,3 +218,42 @@ def write_verified_receipt(receipt: VerifiedSpotHostReceipt,
                                     ensure_ascii=False, indent=2),
                          encoding="utf-8")
     temporary.replace(path)
+
+
+def load_verified_receipt(path: Path,
+                          binding: McpAccountBinding) -> VerifiedSpotHostReceipt:
+    """Reload a previously verified receipt without weakening account binding.
+
+    Freshness is deliberately not implied here.  Consumers that authorize an
+    action must still apply their own short snapshot-age limit.
+    """
+    if (not isinstance(binding, McpAccountBinding)
+            or binding.fingerprint is None):
+        raise ValueError("An enrolled Agentic account binding is required")
+    payload = load_json_document(path, "verified MCP Spot receipt")
+    expected = {"schema_version", "status", "request_id", "symbol",
+                "account_ref", "account_fingerprint", "observed_at",
+                "completed_tools", "tool_results"}
+    if (set(payload) != expected or payload["schema_version"] != "1.0"
+            or payload["status"] != "VERIFIED"
+            or payload["completed_tools"] != list(MCP_SPOT_READ_TOOLS)
+            or not isinstance(payload["tool_results"], dict)
+            or set(payload["tool_results"]) != set(MCP_SPOT_READ_TOOLS)):
+        raise ValueError("Invalid verified MCP Spot receipt")
+    _assert_sanitized(payload)
+    if (payload["account_ref"] != binding.account_ref
+            or not isinstance(payload["account_fingerprint"], str)
+            or not secrets.compare_digest(
+                payload["account_fingerprint"], binding.fingerprint)):
+        raise ValueError("Verified MCP account binding mismatch")
+    symbol = payload["symbol"]
+    if not isinstance(symbol, str):
+        raise ValueError("Invalid verified MCP Spot symbol")
+    base, quote = _exchange_assets(
+        payload["tool_results"]["spot.exchangeInfo"], symbol)
+    receipt = VerifiedSpotHostReceipt(
+        payload["request_id"], symbol, binding.account_ref,
+        binding.fingerprint, payload["observed_at"], base, quote,
+        payload["tool_results"], binding, False)
+    receipt.summary()
+    return receipt

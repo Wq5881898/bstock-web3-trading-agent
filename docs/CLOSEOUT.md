@@ -13,6 +13,7 @@ Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) 
 - 现有 Codex Binance MCP 宿主的无凭据读取请求、订单候选计划和严格宿主回执。
 - 既有 Agentic 子账户完成一次真实 BTCUSDT 七项只读闭环、完整分页、脱敏和严格导入。
 - 2026-09-22 再次通过既有 MCP 连接核对现有 Agentic Spot 账户和 BTCUSDT 挂单；未创建账户、未使用 API Key、未调用写工具。
+- 已确认 NVDAB 不是 Binance 交易所 Spot 标的；MCP 原型固定为 BTCUSDT，并加入无执行通道的公共行情长期观察器。
 - 真实 `spot.newOrder`/`spot.getOrder` schema 已读取验证，没有在该次验收调用写工具。
 - 候选计划、逐笔确认、短时一次性提交票据、终态/UNKNOWN 回执和账本优先导入已完成离线验收。
 - Agentic Wallet 保持独立 BSC 通道，绝不作为 MCP 失败回退。
@@ -24,6 +25,7 @@ Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) 
 - Credential-free read requests, candidate order plans, and strict host receipts for the existing Codex Binance MCP host.
 - One live seven-part BTCUSDT read loop against the existing Agentic sub-account, with complete pagination, sanitization, and strict import.
 - On 2026-09-22, the existing Agentic Spot account and BTCUSDT open orders were revalidated through the existing MCP connection; no account, API key, or write call was created.
+- NVDAB is confirmed not to be a Binance exchange Spot symbol. The MCP prototype is fixed to BTCUSDT and now includes a public-market long-running observer with no execution transport.
 - Live `spot.newOrder`/`spot.getOrder` schemas were validated without calling a write tool in that acceptance run.
 - Candidate, per-order confirmation, expiring one-shot ticket, terminal/UNKNOWN receipt, and ledger-first import flows passed offline acceptance.
 - Agentic Wallet remains an independent BSC route and never serves as MCP fallback.

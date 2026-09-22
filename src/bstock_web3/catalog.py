@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 import requests
@@ -15,6 +16,7 @@ ASSET_STATUS_URL = (
     "market/token/rwa/asset/market/status/ai"
 )
 HEADERS = {"Accept-Encoding": "identity", "User-Agent": "binance-web3/1.1 (Skill)"}
+EXCHANGE_SPOT_INFO_URL = "https://data-api.binance.vision/api/v3/exchangeInfo"
 
 
 @dataclass(frozen=True)
@@ -86,4 +88,57 @@ class BStockCatalogClient:
         if not payload.get("success") or payload.get("code") != "000000":
             raise RuntimeError(f"Binance bStock API 返回失败：{payload}")
         return payload
+
+
+class BinanceExchangeSpotCatalogClient:
+    """Public Binance exchange Spot identity/status; never reads an account."""
+
+    def __init__(self, *, session: Any | None = None, timeout: float = 10.0,
+                 base_url: str = EXCHANGE_SPOT_INFO_URL) -> None:
+        self.session = session or requests
+        self.timeout = timeout
+        self.base_url = base_url
+
+    def resolve(self, symbol: str) -> BStockAsset:
+        normalized = self._symbol(symbol)
+        row = self._row(normalized)
+        base, quote = row.get("baseAsset"), row.get("quoteAsset")
+        if (not isinstance(base, str) or not isinstance(quote, str)
+                or base + quote != normalized
+                or row.get("isSpotTradingAllowed") is not True):
+            raise ValueError("Invalid Binance exchange Spot instrument")
+        return BStockAsset(base, base, "", "", normalized, "1")
+
+    def market_status(self, asset: BStockAsset) -> BStockMarketStatus:
+        if not isinstance(asset, BStockAsset):
+            raise ValueError("Invalid Binance exchange Spot asset")
+        row = self._row(self._symbol(asset.spot_symbol))
+        status = row.get("status")
+        allowed = row.get("isSpotTradingAllowed") is True
+        trading = status == "TRADING" and allowed
+        return BStockMarketStatus(
+            trading, "TRADING" if trading else str(status or "UNKNOWN"),
+            None if trading else "Binance exchange Spot market unavailable",
+            str(status) if status is not None else None,
+        )
+
+    @staticmethod
+    def _symbol(value: str) -> str:
+        normalized = value.strip().upper() if isinstance(value, str) else ""
+        if not re.fullmatch(r"[A-Z0-9]{5,32}", normalized):
+            raise ValueError("Invalid Binance exchange Spot symbol")
+        return normalized
+
+    def _row(self, symbol: str) -> dict[str, Any]:
+        response = self.session.get(
+            self.base_url, params={"symbol": symbol}, headers=HEADERS,
+            timeout=self.timeout)
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("symbols") if isinstance(payload, dict) else None
+        if (not isinstance(rows, list) or len(rows) != 1
+                or not isinstance(rows[0], dict)
+                or rows[0].get("symbol") != symbol):
+            raise ValueError("Binance exchange Spot symbol not found")
+        return rows[0]
 

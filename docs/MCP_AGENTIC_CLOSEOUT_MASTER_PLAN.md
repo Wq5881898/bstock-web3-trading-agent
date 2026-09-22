@@ -87,7 +87,7 @@ local candle pipeline -> unified strategy engine -> local risk/session state
 - 不直接调用私有 Binance REST 下单接口。
 - 不在 MCP、Spot API、Agentic Wallet 之间自动回退。
 - Agentic Wallet 保持独立链上实验通道，不属于本项目 MCP Spot 自动交易主链。
-- 当前原型保持单标的 Spot；多标的、合约仅保留接口扩展能力，不进入收尾范围。
+- 当前 MCP 原型固定为单标的 Binance 交易所 Spot `BTCUSDT`；`NVDAB`经只读核对不是交易所Spot有效标的，只保留在bStock/Web3通道。多标的、合约仅保留接口扩展能力，不进入收尾范围。
 
 Fixed constraints:
 
@@ -97,7 +97,7 @@ Fixed constraints:
 - Do not call private Binance REST order endpoints directly.
 - Do not silently fall back among MCP, Spot API, and Agentic Wallet.
 - Agentic Wallet remains an independent on-chain experiment and is not part of this MCP Spot execution path.
-- Closeout remains single-symbol Spot; multi-symbol and futures stay extension points only.
+- The MCP closeout uses one Binance exchange Spot symbol, `BTCUSDT`. Read-only validation confirmed that `NVDAB` is not an exchange-Spot symbol, so it remains on the bStock/Web3 path. Multi-symbol and futures stay extension points only.
 
 ## 4. 文档优先级与纠正清单 / Document precedence and correction list
 
@@ -268,5 +268,5 @@ Gate: `MCP-AUTO-001` 至 `MCP-AUTO-010` 全部有证据；任何真实订单仍�
 | Phase 1 | 已完成 / Complete | `MCP-AUTO-001/004/005/007/008` 持久化候选会话及故障注入测试通过 / durable candidate session and fault-injection tests pass |
 | Phase 2 | 已完成 / Complete | `MCP-AUTO-002/003/005/006/008/010` 文件化确认、票据、终态/UNKNOWN及账本闭环通过 / file-safe confirmation, ticket, terminal/UNKNOWN, and ledger loop pass |
 | Phase 3 | 已完成 / Complete | 现有策略/K线/账户页加默认关闭真实MCP票据开关、确认弹窗和终态导入 / existing strategy/candle/account UI plus off-by-default live MCP ticket, confirmation and result import |
-| Phase 4 | 进行中（1/6）/ In progress (1/6) | 2026-09-22 已通过既有MCP只读核对现有Agentic账户和BTCUSDT挂单；未写入。BUY、SELL、故障演练及24小时运行仍待当笔监督 / existing Agentic account and BTCUSDT open orders revalidated read-only through the existing MCP; no write. BUY, SELL, failure drills and 24-hour run remain supervised |
+| Phase 4 | 进行中（第2步已启动）/ In progress (step 2 started) | 第1步既有MCP账户只读核对通过；已修正NVDAB/交易所Spot标的不一致并启动BTCUSDT只观察进程。最小BUY、SELL、故障演练及完整24小时仍待监督 / step 1 account readback passed; the NVDAB/exchange-Spot mismatch is corrected and a BTCUSDT observe-only process has started. Minimum BUY, SELL, failure drills, and the full 24 hours remain supervised |
 | Phase 5 | 进行中 / In progress | 脱敏验收记录已建立；完整回归、打包/启动冒烟、敏感信息扫描和GitHub同步在收尾提交中完成 / sanitized acceptance record created; full regression, package/start smoke, secret scan, and GitHub sync complete in the closeout commit |
