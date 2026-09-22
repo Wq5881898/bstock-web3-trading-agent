@@ -148,6 +148,15 @@ class AutomationPolicy:
             reasons.append("entry_cooldown")
         return self._decision(reasons, transitioned)
 
+    def observe_risk(self, snapshot: AccountRiskSnapshot, *, now_ms: int) -> bool:
+        """Latch BUY risk on every fresh account read, even for HOLD signals."""
+        if not isinstance(snapshot, AccountRiskSnapshot):
+            raise ValueError("Invalid account risk snapshot")
+        self._validate_now(now_ms)
+        if self._snapshot_health(snapshot, now_ms):
+            raise ValueError("Account snapshot is not safe for risk observation")
+        return self._observe_buy_risk(snapshot, now_ms)
+
     def pause_buys(self, *, reason="manual_pause", now_ms: int):
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("Invalid pause reason")

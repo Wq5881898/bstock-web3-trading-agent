@@ -15,6 +15,7 @@ from pathlib import Path
 import time
 
 from .autonomous_runner import AutonomousSpotRunner
+from .autonomous_service import SpotServiceCycle
 from .autonomous_session import (AutonomousSpotSession, SessionBinding,
     SessionPhase)
 from .automation_policy import AutomationPolicy, AutomationPolicyConfig
@@ -22,6 +23,7 @@ from .binance_spot_api import (BinanceSpotApi, SpotApiCredentials,
     PRODUCTION_URL, TESTNET_URL)
 from .execution_lock import ExecutionLock
 from .execution_safety import ExecutionJournal
+from .mcp_confirmed import SpotMarketRules
 from .provider import BinanceSpotKlineProvider
 from .spot_api_reconcile import SpotApiReconciler
 from .spot_signal_source import SpotMtfSignalSource
@@ -61,7 +63,8 @@ def _service(args):
     account_ref = "api-" + credentials.fingerprint[:20]
     binding = SessionBinding(account_ref, credentials.fingerprint, args.symbol,
         args.base, args.quote, "mtf", _digest(asdict(strategy_config)),
-        _digest({key: str(value) for key, value in asdict(policy_config).items()}))
+        _digest({key: str(value) for key, value in asdict(policy_config).items()}),
+        args.expected_uid)
     directory = args.state_dir.resolve()
     journal_path = directory / "journal.json"
     lock = ExecutionLock(journal_path.with_suffix(".json.lock"))
@@ -73,7 +76,8 @@ def _service(args):
                                         executor)
         reconciler = SpotApiReconciler(api, directory,
             account_ref=account_ref, symbol=args.symbol,
-            base_asset=args.base, quote_asset=args.quote)
+            base_asset=args.base, quote_asset=args.quote,
+            expected_uid=args.expected_uid)
         market_url = PRODUCTION_URL if args.live else TESTNET_URL
         source = SpotMtfSignalSource(args.symbol, args.base, args.quote,
             config=strategy_config,
@@ -86,40 +90,59 @@ def _service(args):
             if not session.resume(snapshot.evidence, now_ms=int(time.time() * 1000),
                                   filled_order_ids=snapshot.filled_order_ids):
                 raise RuntimeError("Recovery lookup or risk gate is unresolved")
+        elif session.phase == SessionPhase.STOPPING:
+            pass  # restart completes the original stop; never resumes signals
         else:
             raise RuntimeError("Session exists; restart requires explicit --resume in recovery mode")
-        print(json.dumps({"event": "STARTED", "phase": session.phase.value,
+        print(json.dumps({"event": "STOPPING_RECOVERY" if session.phase == SessionPhase.STOPPING else "STARTED", "phase": session.phase.value,
             "symbol": args.symbol, "venue": "production" if args.live else "testnet",
             "account_ref": account_ref}, ensure_ascii=False), flush=True)
-        stop_file, resume_file = directory / "stop.request", directory / "resume.request"
+        service = SpotServiceCycle(session, runner, directory)
         while True:
-            now_ms = int(time.time() * 1000)
-            if stop_file.exists():
-                session.request_stop()
-            try:
-                if session.phase == SessionPhase.STOPPING:
-                    if runner.stop(now_ms=now_ms):
-                        stop_file.unlink(missing_ok=True)
-                        print('{"event":"STOPPED"}', flush=True)
-                        return 0
-                else:
-                    if resume_file.exists() and session.phase == SessionPhase.BUY_PAUSED:
-                        snapshot = reconciler.read(now_ms=now_ms)
-                        allowed = session.resume(snapshot.evidence, now_ms=now_ms,
-                            filled_order_ids=snapshot.filled_order_ids)
-                        resume_file.unlink(missing_ok=True)
-                        print(json.dumps({"event": "RESUME", "allowed": allowed}), flush=True)
-                    result = runner.tick(now_ms=now_ms)
-                    if result.outcome not in ("HOLD", "BLOCKED") or result.reasons:
-                        print(json.dumps({"event": result.outcome,
-                            "reasons": result.reasons, "order_status": result.order_status,
-                            "phase": session.phase.value}), flush=True)
-            except Exception as exc:
-                # Never print a signed URL, server error body, API key or secret.
-                print(json.dumps({"event": "READ_OR_EXECUTION_ERROR",
-                    "error_type": type(exc).__name__,
-                    "phase": session.phase.value}), flush=True)
+            event = service.step(now_ms=int(time.time() * 1000))
+            if event["event"] not in ("HOLD", "STOPPING") and (
+                    event["event"] != "BLOCKED" or event.get("reasons") or event.get("reason")):
+                print(json.dumps(event, ensure_ascii=False), flush=True)
+            if event["event"] == "STOPPED":
+                return 0
             time.sleep(args.poll_seconds)
+
+
+def _preflight(args):
+    credentials = SpotApiCredentials.from_environment()
+    api = BinanceSpotApi(credentials,
+        base_url=PRODUCTION_URL if args.live else TESTNET_URL)
+    account = api.account()
+    if (not isinstance(account, dict) or account.get("accountType") != "SPOT"
+            or account.get("canTrade") is not True
+            or type(account.get("uid")) is not int or account["uid"] <= 0):
+        raise ValueError("Spot API account UID is unavailable")
+    if args.expected_uid is not None and account["uid"] != args.expected_uid:
+        raise ValueError("Spot API account UID mismatch")
+    rules = SpotMarketRules.from_exchange_info(api.exchange_info(args.symbol),
+                                               args.symbol)
+    commission = api.commission(args.symbol)
+    book = api.book_ticker(args.symbol)
+    open_orders = api.open_orders_all()
+    if (not isinstance(commission, dict) or commission.get("symbol") != args.symbol
+            or not isinstance(book, dict) or book.get("symbol") != args.symbol
+            or not isinstance(open_orders, list)):
+        raise ValueError("Spot API preflight reads incomplete")
+    balances = account.get("balances")
+    if not isinstance(balances, list):
+        raise ValueError("Spot API balances unavailable")
+    selected = {row["asset"]: {"free": row["free"], "locked": row["locked"]}
+        for row in balances if isinstance(row, dict)
+        and row.get("asset") in (rules.base_asset, rules.quote_asset)}
+    print(json.dumps({"event": "PREFLIGHT_READ_ONLY",
+        "venue": "production" if args.live else "testnet",
+        "uid": account["uid"], "can_trade": account.get("canTrade"),
+        "symbol": rules.symbol, "base_asset": rules.base_asset,
+        "quote_asset": rules.quote_asset, "balances": selected,
+        "open_order_count": len(open_orders),
+        "api_key_fingerprint_prefix": credentials.fingerprint[:12]},
+        ensure_ascii=False), flush=True)
+    return 0
 
 
 def main(argv=None):
@@ -139,6 +162,14 @@ def main(argv=None):
     run.add_argument("--loss-limit", default="10")
     run.add_argument("--max-position-cost", default="100")
     run.add_argument("--poll-seconds", type=int, default=60)
+    run.add_argument("--expected-uid", type=int,
+        help="required for production; must match read-only preflight UID")
+    preflight = sub.add_parser("preflight", help="read-only API account and symbol check")
+    preflight.add_argument("--symbol", default="BTCUSDT")
+    preflight_venue = preflight.add_mutually_exclusive_group(required=True)
+    preflight_venue.add_argument("--live", action="store_true")
+    preflight_venue.add_argument("--testnet", action="store_true")
+    preflight.add_argument("--expected-uid", type=int)
     for command, name in (("stop", "stop.request"), ("resume-buys", "resume.request")):
         control = sub.add_parser(command)
         control.add_argument("--state-dir", type=Path, required=True)
@@ -150,10 +181,15 @@ def main(argv=None):
         except RuntimeError as exc:
             parser.exit(2, f"Autonomous Spot control blocked: {type(exc).__name__}\n")
         return 0
-    if not 30 <= args.poll_seconds <= 300:
+    if args.command == "run" and args.live and (
+            args.expected_uid is None or args.expected_uid <= 0):
+        parser.error("production run requires --expected-uid from read-only preflight")
+    if args.expected_uid is not None and args.expected_uid <= 0:
+        parser.error("expected UID must be positive")
+    if args.command == "run" and not 30 <= args.poll_seconds <= 300:
         parser.error("poll seconds must be between 30 and 300")
     try:
-        return _service(args)
+        return _preflight(args) if args.command == "preflight" else _service(args)
     except (RuntimeError, ValueError, InvalidOperation) as exc:
         parser.exit(2, f"Autonomous Spot startup blocked: {type(exc).__name__}\n")
 

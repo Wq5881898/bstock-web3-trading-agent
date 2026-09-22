@@ -11,16 +11,17 @@ Status: offline prototype, **not a live-accepted product**. This work did not re
 - 每笔下单前核对全量成交/订单分页、现货规则、手续费、盘口、余额、挂单和净值；不明资金变化失败关闭。 / Before each order: complete paginated fills/orders, Spot filters, commission, book, balances, open orders and equity; unexplained balance movements fail closed.
 - 100 USDT预算、10 USDT累计权益亏损暂停BUY、SELL继续、手动恢复；确定性订单ID、`UNKNOWN`只查单。 / 100-USDT budget, 10-USDT cumulative equity-loss BUY latch, continued SELL, manual resume, deterministic client IDs and lookup-only UNKNOWN.
 - 同一启动会话中MTF信号可连续触发BUY/SELL；必须先从成交历史验证上笔订单并写入账本，再接受下一笔。 / MTF signals can trigger successive BUY/SELL actions in one start; the prior order must appear in exchange fills and be persisted before another action.
+- 故障注入涵盖断网后停止、提交状态未知只查单、提交中崩溃、回执先于账本、部分成交后取消、重启保持停买或继续停机；加速模拟了1440个分钟周期，仅发生一次BUY和一次SELL。**加速仿真不是24小时实盘验收。** / Fault tests cover disconnect during stop, lookup-only UNKNOWN, crash during submission, receipt before ledger, partial cancel, and restart while BUY-paused or stopping. An accelerated 1,440-minute simulation produced one BUY and one SELL. **This is not 24-hour live acceptance.**
 
 ## 运行形式 / Runtime shape
 
-安装项目后，`bstock-auto run --testnet --state-dir <dedicated-directory>`在当前终端前台常驻；另一个终端使用`bstock-auto stop --state-dir <same-directory>`请求安全停止。重启后的恢复需要显式`--resume`；风控暂停恢复使用`bstock-auto resume-buys --state-dir <same-directory>`，仍会重新检查亏损指标。轮询默认60秒。
+安装项目后，先用`bstock-auto preflight --testnet --symbol BTCUSDT`进行只读账户/交易对核验，再用`bstock-auto run --testnet --state-dir <dedicated-directory>`在当前终端前台常驻；另一个终端使用`bstock-auto stop --state-dir <same-directory>`请求安全停止。重启后的恢复需要显式`--resume`；风控暂停恢复使用`bstock-auto resume-buys --state-dir <same-directory>`，仍会重新检查亏损指标。轮询默认60秒。
 
-After installation, `bstock-auto run --testnet --state-dir <dedicated-directory>` remains in the foreground. From another terminal use `bstock-auto stop --state-dir <same-directory>`. Restart requires explicit `--resume`; a BUY latch requires `bstock-auto resume-buys --state-dir <same-directory>` and cannot bypass active loss limits. Polling defaults to 60 seconds.
+After installation, first run the read-only `bstock-auto preflight --testnet --symbol BTCUSDT`, then `bstock-auto run --testnet --state-dir <dedicated-directory>` in the foreground. From another terminal use `bstock-auto stop --state-dir <same-directory>`. Restart requires explicit `--resume`; a BUY latch requires `bstock-auto resume-buys --state-dir <same-directory>` and cannot bypass active loss limits. Polling defaults to 60 seconds.
 
-生产环境必须显式改用`--live`，并由操作员在**专用账户**配置`BINANCE_API_KEY`与`BINANCE_API_SECRET`。请勿把密钥贴到聊天、配置文件或Git仓库。不要在现有有资金的Agentic账户上直接假设API权限可用；账户归属与余额必须先独立核验。测试网不等于原Agentic账户。
+生产环境必须先执行只读`preflight --live`取得并人工核对UID；生产`run --live`要求`--expected-uid`，与每次账户读取的UID不一致则失败关闭。操作员需在**专用账户**配置`BINANCE_API_KEY`与`BINANCE_API_SECRET`，仅授予所需读取/现货交易权限，禁用提现并设置IP白名单。请勿把密钥贴到聊天、配置文件或Git仓库。不要在现有有资金的Agentic账户上直接假设API权限可用；测试网不等于原Agentic账户。
 
-Production requires explicit `--live` and `BINANCE_API_KEY`/`BINANCE_API_SECRET` from a **dedicated account**. Never paste secrets into chat, config files or Git. Do not assume API credentials control the existing funded Agentic account; independently verify ownership and balances. Testnet is not the Agentic account.
+Production requires read-only `preflight --live` and manual UID verification first; `run --live` then requires `--expected-uid` and fails closed on every mismatched account read. Use `BINANCE_API_KEY`/`BINANCE_API_SECRET` from a **dedicated account** with only required read/Spot-trade permissions, withdrawal disabled and an IP allowlist. Never paste secrets into chat, config files or Git. Do not assume API credentials control the existing funded Agentic account. Testnet is not the Agentic account.
 
 ## 尚未通过的产品验收 / Still unaccepted
 

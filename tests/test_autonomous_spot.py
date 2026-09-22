@@ -9,8 +9,11 @@ from bstock_web3.autonomous_runner import AutonomousSpotRunner, _buy_cost_block
 from bstock_web3.automation_policy import AutomationPolicy
 from bstock_web3.execution_lock import ExecutionLock
 from bstock_web3.execution_safety import (ExecutionJournal, ExecutionPhase,
-    McpReconciliationEvidence)
+    ExecutionArming, ExecutionMode, McpReconciliationEvidence,
+    prepare_safe_execution)
 from bstock_web3.execution_contract import ProductType
+from bstock_web3.execution_contract import (ExecutionInstrument, OrderIntent,
+    PositionAction)
 from bstock_web3.mcp_confirmed import SpotMarketRules
 from bstock_web3.strategy import SignalDecision
 from bstock_web3.spot_api_reconcile import SpotApiSnapshot
@@ -212,3 +215,155 @@ def test_same_signal_key_cannot_dispatch_again_after_fill(harness):
         filled_order_ids=frozenset({123}))
     assert again.reasons == ("duplicate_strategy_event",)
     assert [method for method, _ in api.calls] == ["POST"]
+
+
+def test_crash_after_order_journal_before_session_save_needs_fill_proof(harness):
+    session, executor, api, _ = harness
+    session.start()
+    intent = OrderIntent("mtf", ExecutionInstrument("BTCUSDT", ProductType.SPOT,
+        "BINANCE_SPOT", "BTC", "USDT"), PositionAction.OPEN_LONG,
+        Decimal("100"), "bar:1")
+    assert executor.execute(intent, evidence(), rules(),
+        signal_key="bar:1", now_ms=NOW).order_status == "FILLED"
+    recovered = AutonomousSpotSession(session.path, session.binding, executor)
+    assert recovered.phase == SessionPhase.RECOVERY_ONLY
+    fresh = evidence("spot-read-002", observed_at_ms=NOW + 1,
+        position_quantity=Decimal("1"), position_cost=Decimal("100"))
+    assert not recovered.resume(fresh, now_ms=NOW + 1)
+    assert recovered.resume(fresh, now_ms=NOW + 1,
+                            filled_order_ids=frozenset({123}))
+    assert [method for method, _ in api.calls] == ["POST"]
+
+
+def test_partially_executed_cancel_requires_fill_history_before_stop(harness):
+    session, executor, api, _ = harness
+    original = api._order
+    def canceled(args):
+        return {**original(args), "status": "CANCELED"}
+    api._order = canceled
+    session.start()
+    assert session.process(signal("buy", "bar:1"), evidence(), rules(),
+        signal_key="bar:1", now_ms=NOW).order_status == "CANCELED"
+    session.request_stop()
+    fresh = evidence("spot-read-002", observed_at_ms=NOW + 1,
+        position_quantity=Decimal("1"), position_cost=Decimal("100"))
+    assert not session.finish_stop(now_ms=NOW + 1, evidence=fresh)
+    assert session.finish_stop(now_ms=NOW + 1, evidence=fresh,
+        filled_order_ids=frozenset({123}))
+
+
+def test_accelerated_24_hour_cycle_has_only_one_buy_one_sell(harness):
+    session, executor, api, _ = harness
+    fees = {name: {side: "0" for side in ("taker", "buyer", "seller")}
+            for name in ("standardCommission", "specialCommission", "taxCommission")}
+    book = {"bidPrice": "100", "askPrice": "100.1"}
+    class Reconciler:
+        def initialize(self, *, now_ms):
+            return SpotApiSnapshot(evidence("initial-001"), rules(), fees, book)
+        def read(self, *, now_ms):
+            phase = len([method for method, _ in api.calls if method == "POST"])
+            values = ({"position_quantity": Decimal("1"),
+                       "position_cost": Decimal("100")}
+                      if phase == 1 else {})
+            ids = frozenset({123, 124}) if phase == 2 else (
+                  frozenset({123}) if phase == 1 else frozenset())
+            return SpotApiSnapshot(evidence(f"read-{now_ms}",
+                observed_at_ms=now_ms, **values), rules(), fees, book, ids)
+    class Source:
+        calls = 0
+        def evaluate(self, account, *, now_ms):
+            self.calls += 1
+            action = "buy" if self.calls == 1 else (
+                     "sell" if self.calls == 720 else "hold")
+            return replace(signal(action, f"bar:{self.calls}"),
+                expected_edge=0.01), f"bar:{self.calls}"
+    runner = AutonomousSpotRunner(session, Reconciler(), Source())
+    runner.start(now_ms=NOW)
+    for minute in range(1, 1441):
+        runner.tick(now_ms=NOW + minute * 60_000)
+    assert runner.stop(now_ms=NOW + 1441 * 60_000)
+    assert [args["side"] for method, args in api.calls if method == "POST"] == [
+        "BUY", "SELL"]
+
+
+def test_crash_in_submitting_is_lookup_only_after_restart(harness):
+    session, executor, api, _ = harness
+    session.start()
+    intent = OrderIntent("mtf", ExecutionInstrument("BTCUSDT", ProductType.SPOT,
+        "BINANCE_SPOT", "BTC", "USDT"), PositionAction.OPEN_LONG,
+        Decimal("100"), "bar:1")
+    arming = ExecutionArming(ExecutionMode.UNATTENDED, "api-account",
+        "BTCUSDT", ProductType.SPOT, NOW + 1000)
+    prepared = prepare_safe_execution(intent, evidence(), executor.policy,
+        arming, executor.journal, signal_key="bar:1", now_ms=NOW)
+    assert prepared.decision.allowed
+    executor.journal.transition(prepared.record.fingerprint,
+        ExecutionPhase.SUBMITTING, now_ms=NOW)
+    recovered = AutonomousSpotSession(session.path, session.binding, executor)
+    assert recovered.phase == SessionPhase.RECOVERY_ONLY
+    def lookup(symbol, client_order_id):
+        api.calls.append(("GET", client_order_id))
+        return {"symbol": symbol, "clientOrderId": client_order_id,
+            "side": "BUY", "type": "MARKET", "orderId": 123,
+            "status": "FILLED", "executedQty": "1",
+            "cummulativeQuoteQty": "100"}
+    api.get_order = lookup
+    result = executor.reconcile_unresolved(now_ms=NOW + 1)
+    assert result[0].order_status == "FILLED"
+    fresh = evidence("spot-read-002", observed_at_ms=NOW + 2,
+        position_quantity=Decimal("1"), position_cost=Decimal("100"))
+    assert recovered.resume(fresh, now_ms=NOW + 2,
+        filled_order_ids=frozenset({123}))
+    assert [method for method, _ in api.calls] == ["GET"]
+
+
+def test_hold_cycle_immediately_latches_loss_and_later_sell_still_runs(harness):
+    session, executor, api, _ = harness
+    session.start()
+    class Reconciler:
+        def read(self, *, now_ms):
+            return SpotApiSnapshot(evidence(f"risk-{now_ms}",
+                observed_at_ms=now_ms, position_quantity=Decimal("1"),
+                position_cost=Decimal("100"), daily_equity_loss=Decimal("10")),
+                rules(), {}, {}, frozenset())
+    class Source:
+        calls = 0
+        def evaluate(self, account, *, now_ms):
+            self.calls += 1
+            return signal("hold" if self.calls == 1 else "sell",
+                          f"bar:{self.calls}"), f"bar:{self.calls}"
+    runner = AutonomousSpotRunner(session, Reconciler(), Source())
+    assert runner.tick(now_ms=NOW).outcome == "HOLD"
+    assert session.phase == SessionPhase.BUY_PAUSED
+    assert runner.tick(now_ms=NOW + 1).order_status == "FILLED"
+    assert [args["side"] for method, args in api.calls if method == "POST"] == ["SELL"]
+
+
+def test_restart_with_loss_resumes_sell_loop_without_unlocking_buys(harness):
+    session, executor, api, _ = harness
+    session.start()
+    risky = evidence(position_quantity=Decimal("1"),
+        position_cost=Decimal("100"), daily_equity_loss=Decimal("10"))
+    assert session.observe_risk(risky, now_ms=NOW)
+    recovered = AutonomousSpotSession(session.path, session.binding, executor)
+    assert recovered.phase == SessionPhase.RECOVERY_ONLY
+    fresh = evidence("risk-read-002", observed_at_ms=NOW + 1,
+        position_quantity=Decimal("1"), position_cost=Decimal("100"),
+        daily_equity_loss=Decimal("10"))
+    assert recovered.resume(fresh, now_ms=NOW + 1)
+    assert recovered.phase == SessionPhase.BUY_PAUSED
+    assert recovered.process(signal("sell", "bar:2"), fresh, rules(),
+        signal_key="bar:2", now_ms=NOW + 1).order_status == "FILLED"
+    assert [args["side"] for method, args in api.calls if method == "POST"] == ["SELL"]
+
+
+def test_restart_during_stopping_never_rearms(harness):
+    session, executor, api, _ = harness
+    session.start()
+    session.request_stop()
+    recovered = AutonomousSpotSession(session.path, session.binding, executor)
+    assert recovered.phase == SessionPhase.STOPPING
+    assert recovered.process(signal("buy", "bar:1"), evidence(), rules(),
+        signal_key="bar:1", now_ms=NOW).outcome == "BLOCKED"
+    assert recovered.finish_stop(now_ms=NOW)
+    assert api.calls == []

@@ -32,11 +32,15 @@ class SessionBinding:
     strategy_id: str
     strategy_config_hash: str
     risk_config_hash: str
+    account_uid: int | None = None
 
     def __post_init__(self):
         if any(not isinstance(value, str) or not value.strip()
-               for value in asdict(self).values()):
+               for key, value in asdict(self).items() if key != "account_uid"):
             raise ValueError("Incomplete autonomous session binding")
+        if self.account_uid is not None and (type(self.account_uid) is not int
+                                             or self.account_uid <= 0):
+            raise ValueError("Invalid bound Spot account UID")
         ensure_strategy_supports(self.strategy_id, ProductType.SPOT)
 
 
@@ -60,8 +64,7 @@ class AutonomousSpotSession:
             executor.policy = AutomationPolicy.restore(payload["policy"],
                 executor.policy.config)
             executor._results.policy = executor.policy
-            if self.phase in (SessionPhase.RUNNING, SessionPhase.BUY_PAUSED,
-                              SessionPhase.STOPPING):
+            if self.phase in (SessionPhase.RUNNING, SessionPhase.BUY_PAUSED):
                 self.phase = SessionPhase.RECOVERY_ONLY
                 self._save()
         else:
@@ -79,6 +82,18 @@ class AutonomousSpotSession:
         self.phase = SessionPhase.RUNNING
         self._save()
 
+    def observe_risk(self, evidence, *, now_ms: int):
+        if self.phase not in (SessionPhase.RUNNING, SessionPhase.BUY_PAUSED):
+            raise RuntimeError("Session is not running")
+        if evidence.account_ref != self.binding.account_ref or evidence.symbol != self.binding.symbol:
+            raise RuntimeError("Account or symbol binding changed")
+        transitioned = self.executor.policy.observe_risk(
+            evidence.to_snapshot(), now_ms=now_ms)
+        if transitioned:
+            self.phase = SessionPhase.BUY_PAUSED
+            self._save()
+        return transitioned
+
     def process(self, decision: SignalDecision, evidence, rules, *,
                 signal_key: str, now_ms: int,
                 filled_order_ids: frozenset[int] = frozenset()):
@@ -94,9 +109,7 @@ class AutonomousSpotSession:
             if any(row.phase.value != "FILLED" and row.phase.value != "REJECTED"
                    for row in self.executor.journal.records()):
                 return UnattendedResult("BLOCKED", ("order_not_terminal",))
-            last = self.executor.journal.records()[-1]
-            if (last.phase.value == "FILLED" and
-                    (last.external_id is None or int(last.external_id) not in filled_order_ids)):
+            if not self._orders_reflected(filled_order_ids):
                 return UnattendedResult("BLOCKED", ("fill_not_in_ledger",))
             # The caller must provide fresh, complete account/fill evidence.
             if not evidence.to_snapshot().reconciled:
@@ -138,11 +151,11 @@ class AutonomousSpotSession:
                     or evidence.symbol != self.binding.symbol
                     or not evidence.to_snapshot().reconciled):
                 return False
-            last = self.executor.journal.records()[-1]
-            if (last.phase.value == "FILLED" and
-                    (last.external_id is None or int(last.external_id) not in filled_order_ids)):
+            if not self._orders_reflected(filled_order_ids):
                 return False
             self.awaiting_fills = False
+        if not self._orders_reflected(filled_order_ids):
+            return False
         self.phase = SessionPhase.STOPPED
         self._save()
         return True
@@ -161,20 +174,33 @@ class AutonomousSpotSession:
         if self.awaiting_fills and (evidence.evidence_id == self.last_evidence_id
                                     or not snapshot.reconciled):
             return False
-        if self.awaiting_fills:
-            last = self.executor.journal.records()[-1]
-            if (last.phase.value == "FILLED" and
-                    (last.external_id is None or int(last.external_id) not in filled_order_ids)):
-                return False
-        if self.executor.policy.buy_pause_reason:
+        if not self._orders_reflected(filled_order_ids):
+            return False
+        recovering = self.phase == SessionPhase.RECOVERY_ONLY
+        if recovering:
+            self.executor.policy.observe_risk(snapshot, now_ms=now_ms)
+        elif self.executor.policy.buy_pause_reason:
             decision = self.executor.policy.request_manual_resume(snapshot,
                 now_ms=now_ms)
             if not decision.allowed:
                 self._save()
                 return False
         self.awaiting_fills = False
-        self.phase = SessionPhase.RUNNING
+        self.phase = (SessionPhase.BUY_PAUSED
+                      if self.executor.policy.buy_pause_reason
+                      else SessionPhase.RUNNING)
         self._save()
+        return True
+
+    def _orders_reflected(self, filled_order_ids: frozenset[int]) -> bool:
+        """A terminal acknowledgement alone is never a durable fill."""
+        for row in self.executor.journal.records():
+            if row.phase.value not in ("FILLED", "REJECTED"):
+                return False
+            if row.phase.value == "REJECTED" and row.detail == "REJECTED":
+                continue  # Binance guarantees no execution for this status.
+            if row.external_id is None or int(row.external_id) not in filled_order_ids:
+                return False
         return True
 
     def _save(self):

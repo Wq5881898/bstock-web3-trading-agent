@@ -53,6 +53,7 @@ class AutonomousSpotRunner:
                ("NEW", "PARTIALLY_FILLED") for result in unresolved):
             return UnattendedResult("BLOCKED", ("unresolved_execution",))
         snapshot = self.reconciler.read(now_ms=now_ms)
+        self.session.observe_risk(snapshot.evidence, now_ms=now_ms)
         signal, key = self.signal_source.evaluate(snapshot.evidence, now_ms=now_ms)
         if signal.action == "hold" or key is None:
             return UnattendedResult("HOLD")

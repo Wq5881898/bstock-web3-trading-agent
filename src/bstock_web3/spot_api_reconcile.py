@@ -32,11 +32,15 @@ class SpotApiReconciler:
     """
 
     def __init__(self, api, directory: Path, *, account_ref: str,
-                 symbol: str, base_asset: str, quote_asset: str):
+                 symbol: str, base_asset: str, quote_asset: str,
+                 expected_uid: int | None = None):
+        if expected_uid is not None and (type(expected_uid) is not int or expected_uid <= 0):
+            raise ValueError("Invalid expected Spot account UID")
         self.api = api
         self.directory = Path(directory)
         self.account_ref, self.symbol = account_ref, symbol
         self.base_asset, self.quote_asset = base_asset, quote_asset
+        self.expected_uid = expected_uid
         self.fills = SpotFillLedger(self.directory / "fills.json",
             account_ref=account_ref, symbol=symbol, base_asset=base_asset,
             quote_asset=quote_asset)
@@ -102,6 +106,8 @@ class SpotApiReconciler:
         account = self.api.account()
         if not isinstance(account, dict):
             raise ValueError("Invalid Spot account")
+        if self.expected_uid is not None and account.get("uid") != self.expected_uid:
+            raise ValueError("Spot API account UID mismatch")
         account = {key: value for key, value in account.items() if key != "uid"}
         normalized = normalize_fills(trades, self.symbol, self.base_asset,
                                      self.quote_asset)

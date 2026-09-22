@@ -39,12 +39,12 @@ The desktop was previously and incorrectly treated as a new Binance OAuth Agent.
 ## 尚待验收 / Remaining acceptance
 
 1. 已选独立Binance Spot API路线；当前Codex MCP宿主仍要求非GET操作逐笔确认，且API账户不等同于已有Agentic账户。
-2. API自动执行、会话状态、完整对账与MTF信号的离线闭环已实现；需完成账户归属核验、常驻进程故障注入与真实小额验收。
+2. API自动执行、会话状态、完整对账与MTF信号的离线闭环及常驻故障注入已实现；还需实际运行只读UID预检、真实小额验收。
 3. 单标的24小时小额实盘、断线和恢复验收；Median/Range真实信号源仍未接到API常驻命令。
 4. 多币种、Futures和其他外围功能不属于本次收尾阻塞项。
 
 1. A separate Binance Spot API route is approved; the current Codex MCP host still requires per-write confirmation, and an API account is not the existing Agentic account by assumption.
-2. Offline API execution, durable session, full reconciliation and MTF signal loop exist; account ownership checks, service fault injection and a small live acceptance remain.
+2. Offline API execution, durable session, full reconciliation, MTF signal loop and service fault injection exist; actual read-only UID preflight and small live acceptance remain.
 3. Pass a 24-hour small single-symbol live, disconnect and recovery acceptance run; Median/Range live signal feeds are not yet wired to the API service.
 4. Multi-symbol, Futures and other peripheral work do not block this closeout.
 

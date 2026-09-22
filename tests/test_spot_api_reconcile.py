@@ -38,7 +38,8 @@ class FakeReadApi:
     def book_ticker(self, symbol):
         return {"symbol": symbol, "bidPrice": self.bid, "askPrice": "101"}
     def account(self):
-        return {"accountType": "SPOT", "canTrade": True, "balances": [
+        return {"accountType": "SPOT", "canTrade": True, "uid": 123,
+            "balances": [
             {"asset": "USDT", "free": self.quote, "locked": "0"},
             {"asset": "BTC", "free": self.base, "locked": "0"}]}
 
@@ -69,3 +70,12 @@ def test_missing_baseline_blocks_read(tmp_path):
         quote_asset="USDT")
     with pytest.raises(RuntimeError, match="not initialized"):
         reconciler.read(now_ms=NOW)
+
+
+def test_wrong_expected_uid_blocks_before_any_baseline_write(tmp_path):
+    reconciler = SpotApiReconciler(FakeReadApi(), tmp_path,
+        account_ref="api-test", symbol="BTCUSDT", base_asset="BTC",
+        quote_asset="USDT", expected_uid=456)
+    with pytest.raises(ValueError, match="UID mismatch"):
+        reconciler.initialize(now_ms=NOW)
+    assert not (tmp_path / "equity.json").exists()
