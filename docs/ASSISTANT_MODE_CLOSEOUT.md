@@ -1,6 +1,6 @@
 # 对话式交易助手收尾 / Conversational Trading Assistant Closeout
 
-> 状态 / Status: **助手级阶段一完成（文档、项目 Skill、离线回归、MCP 公开只读冒烟）；尚未宣称 Skill 新任务激活或新的真实订单验收。** 此里程碑不替代[持续自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)，也不批准更换账户、OAuth、MCP 或 API 路线。 / **Assistant milestone 1 complete** for documentation, repository Skill, offline regression and public read-only MCP smoke. Fresh-task Skill activation and new live-order acceptance are not claimed. This milestone does not replace the autonomous-trading baseline or approve a transport/account change.
+> 状态 / Status: **对话式助手阶段性收尾完成**：文档、项目 Skill、正式校验、干净检出全套测试、Wheel 安装导入、公开只读 MCP 冒烟和有限敏感信息扫描已通过；**尚未宣称新任务 Skill 行为验收或新的真实订单验收**。此里程碑不替代[持续自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)，也不批准更换账户、OAuth、MCP 或 API 路线。 / **Conversational-assistant milestone closed** for documentation, repository Skill, formal validation, clean-checkout tests, wheel install/import, public read-only MCP smoke and a limited secret scan. Fresh-task Skill behavior and new live-order acceptance are **not** claimed. This does not replace the autonomous-trading baseline or approve a transport/account change.
 
 ## 1. 要交付的能力 / Intended capability
 
@@ -22,7 +22,7 @@ This is a user-initiated, per-action-confirmed assistant, not a continuously una
 | 当前桌面程序直接 MCP / Direct desktop MCP | 桌面程序只生成无凭据文件；[归并记录](CONSOLIDATION.md)说明独立 OAuth 身份未获批准。 / Desktop is not a direct authorized MCP client. | 未实现；不是助手级闭环阻塞项。 / Not implemented and not a blocker for Codex-hosted assistant. |
 | 常驻无人值守执行 / Unattended execution | 非交互 Codex 宿主的通用 MCP 分发工具审批受限；观察器仍为 `OBSERVE_ONLY`。 / Headless generic dispatcher approval is blocked; observer is observe-only. | 不在本里程碑，不能宣称完成。 / Outside this milestone; do not claim complete. |
 | 新闻 MCP / News MCP | 本仓库没有已验收、来源明确且可复现的新闻 MCP 数据闭环。 / No accepted reproducible news feed in this repository. | 可选后续；不得写进当前已交付能力。 / Optional future work, not delivered. |
-| Codex Skill 包装 / Packaged Skill | 已有项目内 [Skill 草案](../.agents/skills/binance-spot-assistant/SKILL.md)，但尚未在新任务中做激活和真实 MCP 行为验收。 / A project-local Skill draft exists, but activation and MCP behavior have not been accepted in a fresh task. | 便利性工作，不是调用现有 MCP 的前提；不能把草案称为已安装产品。 / Convenience packaging, not a prerequisite or an installed-product claim. |
+| Codex Skill 包装 / Packaged Skill | 项目内 [Skill](../.agents/skills/binance-spot-assistant/SKILL.md) 已通过官方 `quick_validate.py`（Python UTF-8 模式）；尚未在新任务中做触发和真实 MCP 行为验收。 / The repository Skill passed the bundled validator with Python UTF-8 mode; fresh-task activation and MCP behavior remain untested. | 可复用操作规范，不是调用现有 MCP 的前提，也不是已安装的个人 Skill。 / Reusable workflow guidance, not a prerequisite or a personally installed Skill. |
 
 ## 3. 助手级最小验收 / Minimum assistant acceptance
 
@@ -35,17 +35,15 @@ This is a user-initiated, per-action-confirmed assistant, not a continuously una
 5. 成交后读取订单、成交、手续费和余额并给出可核对的摘要；拒绝、过期、取消、部分成交与 UNKNOWN 不得被报告为“已成交”。/ Verify result before claiming a fill.
 6. 中英双语说明真实边界、安装/使用条件和失效处置；不包含 Token、UID、精确余额或订单 ID。/ Bilingual public documentation with no secrets or private identifiers.
 
-## 4. 最小剩余工作 / Smallest remaining work
+## 4. 本轮验收与保留项 / Acceptance and residuals
 
-- 将第 2–5 项做一次**不提交真实订单**的对话/假宿主预演，并保存脱敏验收记录。现有源码的安全契约可作为参考，但不要把一次性对话调用强迫接进 15 秒文件化策略会话。 / Rehearse the conversational workflow without a real order and save redacted evidence; do not force chat use through the time-sensitive strategy file handoff.
-- 在新的项目任务中验证 `$binance-spot-assistant` 的触发、缺参、拒绝、过期与 UNKNOWN 行为；Skill 文件存在不等于当前任务已加载，也不需要为此重新授权 MCP。 / Test activation and failure handling in a fresh project task; a file on disk does not prove this task has loaded the Skill, and no new MCP authorization is implied.
-- 公开发布前完成敏感信息扫描、README 能力边界核对和干净环境安装/只读冒烟。 / Before publication, scan for secrets, align README claims and perform install/read-only smoke checks.
+2026-09-23 对已公开的提交 `9edf4a2` 做了独立干净检出：从该检出的 `src` 导入后，全部 **480 项测试通过**；构建 `bstock-web3-engine 1.3.0` Wheel，安装至隔离目录并成功从该目录导入。项目 Skill 经官方 `quick_validate.py` 校验通过。对提交中跟踪的文件进行有限高置信度密钥模式扫描，无命中；`.env`、`runtime/` 和凭据/Token JSON 未被跟踪。这是范围明确的静态检查，不保证不存在任何类型的泄漏。README 的能力边界仍把真实下单限制在已有授权的 Codex MCP 宿主、逐笔确认之内。 / An independent clean checkout of public commit `9edf4a2` passed all **480 collected tests**, built the 1.3.0 wheel, and imported the package from an isolated wheel installation. The bundled Skill validator passed. A limited, high-confidence scan of tracked files found no matching secret patterns or tracked `.env`, `runtime/`, credential or token JSON files; this is not a guarantee against every possible leak. README retains the existing-host/per-order-confirmation boundary.
 
-本轮 2026-09-23 在项目虚拟环境运行完整测试：`505 passed in 50.68s`。这是离线代码回归，不是新的真实订单或 Skill 安装验收。/ The full project test suite passed 505 tests in 50.68 seconds on 2026-09-23. This is offline regression evidence, not a new live order or installed-Skill acceptance.
+原工作区另有未提交改动，先前的 **505 项测试通过**只代表该较新的本地树，不能归给已公开提交。 / The original worktree has separate uncommitted changes; its earlier **505 passing tests** describe that newer local tree and must not be attributed to the public commit.
 
-同日，现有 `binance-agent-os` MCP 的工具发现和 `spot.tickerPrice(symbol=BTCUSDT)` 公开只读调用成功；没有读取私有余额，也没有调用 `spot.newOrder` 或任何其他写工具。对“用 50 USDT 市价买 BTC”的无下单演练仅确认意图应为 Agentic Spot `BTCUSDT`、`BUY MARKET`、`quoteOrderQty=50 USDT`，且在真实账户预检和该笔确认前不得下单；这不是实际账户预检。项目 Skill 的基础 frontmatter 已手工验证；官方 `quick_validate.py` 因当前 Python 环境缺少 `PyYAML` 未能运行，不能将其记为已通过。
+本阶段不再为了“收尾”重复下真实订单。下次真正使用时，仍需在新的项目任务中确认 `$binance-spot-assistant` 被发现，并用不下单预演检验缺参、拒绝、过期和 UNKNOWN 等行为；这属于首次使用前的行为验收，不能凭文件存在推定已经通过，也无需为此重建账户或重新授权。持续无人值守策略交易则仍按产品基准单独推进。 / No additional live order is needed to close this stage. At first use in a fresh project task, confirm Skill discovery and rehearse missing-input, refusal, expiry and UNKNOWN behavior without an order. File presence alone does not prove activation, and no new account or OAuth grant is implied. Unattended strategy execution remains a separate product-baseline task.
 
-On the same date, discovery and a public `spot.tickerPrice(BTCUSDT)` read through the existing MCP succeeded. No private balance or write tool was called. The no-order 50-USDT example checked intent mapping only, not private-account preflight. Basic Skill frontmatter was checked manually; the bundled validator could not run because `PyYAML` is absent from the current Python environments.
+同日，现有 `binance-agent-os` MCP 的工具发现和 `spot.tickerPrice(symbol=BTCUSDT)` 公开只读调用成功；没有读取私有余额，也没有调用 `spot.newOrder` 或任何其他写工具。对“用 50 USDT 市价买 BTC”的无下单演练仅确认意图应为 Agentic Spot `BTCUSDT`、`BUY MARKET`、`quoteOrderQty=50 USDT`，且在真实账户预检和该笔确认前不得下单；这不是实际账户预检。 / On the same date, discovery and a public `spot.tickerPrice(BTCUSDT)` read through the existing MCP succeeded. No private balance or write tool was called. The no-order 50-USDT example checked intent mapping only, not private-account preflight.
 
 ## 5. 不在本里程碑 / Out of scope
 
