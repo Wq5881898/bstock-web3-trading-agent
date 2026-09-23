@@ -165,6 +165,8 @@ After Codex returns a sanitized receipt, verify it with `bstock-mcp-import`. The
 [桌面真实MCP票据 / Desktop live MCP ticket](docs/DESKTOP_LIVE_MCP.md) ·
 [MCP只读验收 / MCP read-only acceptance](docs/MCP_READONLY_ACCEPTANCE.md) ·
 [Codex MCP宿主桥接 / Codex MCP host bridge](docs/MCP_HOST_BRIDGE.md) ·
+[对话式助手收尾 / Conversational assistant closeout](docs/ASSISTANT_MODE_CLOSEOUT.md) ·
+[Alpha2经验库 / Lessons for Alpha2](docs/ALPHA2_TRANSFER_KNOWLEDGE_BASE.md) ·
 [MCP + Agentic收尾总计划 / Closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) ·
 [回迁Alpha2设计 / Alpha2 backport plan](docs/ALPHA2_UNIFIED_STRATEGY_BACKPORT_PLAN.md) ·
 [MCP归并边界 / MCP integration boundaries](docs/CONSOLIDATION.md).
