@@ -100,6 +100,29 @@ def test_candidate_must_match_policy_amount_before_journal_reservation(engine):
     assert executor.journal.records() == () and calls == []
 
 
+def test_btc_sell_candidate_and_fresh_preflight_agree_on_dust(engine):
+    executor, calls, _ = engine
+    btc = BStockAsset("BTC", "BTC", "", "", "BTCUSDT", "1")
+    sell = SignalDecision("sell", "test", 86148.91,
+        "1970-01-01T00:33:20Z", expected_edge=0.004, strategy_id="mtf")
+    candidate = build_mcp_spot_plan(
+        btc, sell, amount_usdt=Decimal("100"),
+        position_quantity=Decimal("0.00011"),
+        account_binding=BINDING, now=NOW_DT)
+    checked = evidence(symbol="BTCUSDT",
+        position_quantity=Decimal("0.00011988"),
+        position_cost=Decimal("9.5"),
+        dust_quantity=Decimal("0.00000988"),
+        dust_cost=Decimal("0.78"))
+    btc_rules = SpotMarketRules("BTCUSDT", "BTC", "USDT",
+        Decimal("0.00001"), Decimal("100"), Decimal("0.00001"),
+        Decimal("5"))
+    preview = prepare_plan_preview(candidate, checked, btc_rules, executor,
+        account_fingerprint="b" * 64, now_ms=NOW)
+    assert Decimal(preview["arguments"]["quantity"]) == Decimal("0.00011")
+    assert calls == []
+
+
 def test_preflight_rejects_account_drift_and_stale_evidence(engine):
     executor, calls, _ = engine
     with pytest.raises(ValueError, match="fingerprint"):

@@ -125,10 +125,9 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 daily_equity_loss=daily_equity_loss)
     if live_loader is None:
         from .mcp_desktop_live import prepare_desktop_live_handoff
-        def live_loader(symbol, receipt, daily_equity_loss):
+        def live_loader(symbol, receipt):
             return prepare_desktop_live_handoff(
-                mcp_plan_file(symbol), receipt, mcp_request_file(symbol).parent,
-                daily_equity_loss=daily_equity_loss)
+                mcp_plan_file(symbol), receipt, mcp_request_file(symbol).parent)
 
     class Monitor(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -761,9 +760,13 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 "演练已取消；未调用MCP / Rehearsal cancelled; no MCP call occurred")
 
         def update_mcp_live_controls(self):
+            symbol = self.mcp_symbol.text().strip().lower()
+            baseline_ready = (bool(re.fullmatch(r"[a-z0-9]{1,32}", symbol))
+                and (mcp_request_file(symbol).parent / "live" /
+                     f"{symbol}-equity-risk.json").is_file())
             ready = (self.mcp_live_enabled.isChecked()
                      and self.mcp_verified_receipt is not None
-                     and self.mcp_live_session is None)
+                     and self.mcp_live_session is None and baseline_ready)
             self.mcp_live_prepare.setEnabled(ready)
             if not self.mcp_live_enabled.isChecked():
                 self.mcp_live_status.setText(
@@ -773,6 +776,10 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 self.mcp_live_status.setText(
                     "真实MCP票据：等待严格核验的账户回执。\n"
                     "Live MCP ticket: waiting for a strictly verified account receipt.")
+            elif not baseline_ready:
+                self.mcp_live_status.setText(
+                    "真实MCP票据：缺少经明确确认的权益基线，不能按累计亏损自动停买。\n"
+                    "Live MCP ticket: confirmed equity baseline required for the loss guard.")
             elif self.mcp_live_session is None:
                 self.mcp_live_status.setText(
                     "真实MCP票据：已启用；载入候选后仍需15秒内逐字确认。\n"
@@ -786,8 +793,7 @@ def create_monitor_class(engine_factory=None, bridge_writer=None,
                 return
             symbol = self.mcp_symbol.text().strip().upper()
             try:
-                session = live_loader(symbol, self.mcp_verified_receipt,
-                    Decimal(str(self.mcp_rehearsal_loss.value())))
+                session = live_loader(symbol, self.mcp_verified_receipt)
                 self.mcp_live_session = session
                 self.mcp_live_prepare.setEnabled(False)
                 self.mcp_live_status.setText(

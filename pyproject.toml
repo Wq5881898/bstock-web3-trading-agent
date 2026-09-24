@@ -26,6 +26,9 @@ bstock-mcp-plan = "bstock_web3.mcp_cli:main"
 bstock-mcp-request = "bstock_web3.mcp_request_cli:main"
 bstock-mcp-import = "bstock_web3.mcp_import_cli:main"
 bstock-spot-observe = "bstock_web3.spot_observer:main"
+bstock-mcp-risk = "bstock_web3.mcp_risk_cli:main"
+bstock-mcp-cycle = "bstock_web3.mcp_cycle:main"
+bstock-mcp-host-cycle = "bstock_web3.mcp_host_cycle:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -5,7 +5,7 @@ market-data, strategy and risk layer.
 
 | Transport | Account | Venue | Authentication owner | Cost model |
 |---|---|---|---|---|
-| Agent OS MCP | Existing host-selected Agentic sub-account | Binance Spot (`NVDABUSDT`) | Authorized Codex host | Spot commission/spread |
+| Agent OS MCP | Existing host-selected Agentic sub-account | Binance exchange Spot (`BTCUSDT` prototype) | Authorized Codex host | Spot commission/spread |
 | Agentic Wallet | Binance Agentic Wallet | BSC bStock swap | official `baw` client | Quote impact/slippage/gas |
 
 They are parallel transports. A failure in one path never authorizes a fallback to the
@@ -17,10 +17,11 @@ The local application never performs OAuth or reads/stores an access token. The
 already-authorized Codex task is the supported MCP host. Run:
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 100
+bstock-mcp-plan --symbol BTCUSDT --amount 100 `
+  --verified-snapshot runtime\mcp\latest-verified-snapshot.json
 ```
 
-The command requires the account fingerprint enrolled by the read-receipt flow, then consumes completed public 1m/5m bars and the same deterministic MTF EMA
+The command requires the account fingerprint enrolled by the read-receipt flow and a strictly verified position receipt no older than 15 seconds. It then consumes completed public 1m/5m bars and the same deterministic MTF EMA
 strategy used by paper/replay. A `hold` signal creates no order plan. A valid `buy` or
 `sell` signal creates `runtime/mcp/latest-order-plan.json` with:
 

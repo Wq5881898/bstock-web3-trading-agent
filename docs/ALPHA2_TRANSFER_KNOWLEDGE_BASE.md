@@ -2,6 +2,8 @@
 
 > 2026-09-23，只读核对 `D:\projectQ\alpha2` 后整理。本文是**迁移知识与验收清单，不是修改 Alpha2 的授权**；不复制运行目录、账户文件、OAuth Token、API Key、UID、余额或订单记录。Alpha2 当前工作树有其他窗口的未提交改动，实施须由 Alpha2 窗口自行评估、分支化和测试。 / Curated after read-only inspection of Alpha2. This is a transfer guide, not permission to edit Alpha2 or copy credentials/runtime state. Its current worktree has unrelated changes.
 
+针对尚未进入 Alpha2 Spot 实盘链路的订单恢复、成交账本、权益风控和故障测试，另见[真实 Spot 安全资产移交主文档](ALPHA2_LIVE_SPOT_SAFETY_HANDOFF.md)与[可复制到 Alpha2 窗口的实施提示](ALPHA2_LIVE_SPOT_SAFETY_IMPLEMENTATION_PROMPT.md)。两者区分已提交源码、未提交实验和 Alpha2 现有骨架；不授权真实下单。 / For remaining live-Spot safety assets and their acceptance gates, use the detailed handoff and implementation prompt; neither authorizes live orders.
+
 ## 1. 首先保留正确的系统边界 / Keep the boundaries
 
 ```text

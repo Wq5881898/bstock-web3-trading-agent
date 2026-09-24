@@ -43,10 +43,11 @@ and writes SHA-256 hashes in its manifest.
 ## 5. Show the Agent OS MCP path
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 100
+bstock-mcp-plan --symbol BTCUSDT --amount 100 `
+  --verified-snapshot runtime\mcp\latest-verified-snapshot.json
 ```
 
-The plan targets `NVDABUSDT` Spot in the existing Codex-host-selected Agentic sub-account. It contains
+The plan targets exchange Spot `BTCUSDT` in the existing Codex-host-selected Agentic sub-account. It contains
 no credentials and cannot execute itself. Show the host-side read-only account, market,
 commission and balance checks, then the one-time confirmation gate. See
 [AGENT_OS_MCP.md](AGENT_OS_MCP.md).

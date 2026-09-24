@@ -9,6 +9,7 @@ from bstock_web3.execution_safety import ExecutionPhase
 from bstock_web3.mcp_bridge import (MCP_SPOT_READ_TOOLS, McpAccountBinding,
     build_mcp_spot_plan, write_mcp_plan)
 from bstock_web3.mcp_desktop_live import prepare_desktop_live_handoff
+from bstock_web3.mcp_equity_guard import McpSpotEquityGuard
 from bstock_web3.mcp_execution_result import MCP_SPOT_TERMINAL_TOOLS
 from bstock_web3.mcp_host_receipt import VerifiedSpotHostReceipt
 from bstock_web3.strategy import SignalDecision
@@ -65,6 +66,16 @@ def verified_receipt():
         tools, BINDING, False)
 
 
+def initialize_risk(tmp_path, receipt=None):
+    receipt = receipt or verified_receipt()
+    path = tmp_path / "live" / "btcusdt-equity-risk.json"
+    with McpSpotEquityGuard(
+            path, account_ref=receipt.account_ref,
+            account_fingerprint=receipt.account_fingerprint,
+            symbol=receipt.symbol) as guard:
+        guard.initialize(receipt, operator_confirmed=True)
+
+
 def terminal_payload(ticket):
     order = {"symbol": "BTCUSDT",
         "clientOrderId": ticket.arguments["newClientOrderId"],
@@ -101,8 +112,10 @@ def terminal_payload(ticket):
 
 def test_desktop_live_handoff_writes_ticket_without_calling_mcp(tmp_path):
     plan_path, _ = candidate(tmp_path)
+    initialize_risk(tmp_path)
     session = prepare_desktop_live_handoff(
         plan_path, verified_receipt(), tmp_path, now_ms=NOW)
+    assert session.executor.policy.config.max_position_cost == Decimal("10")
     ticket_path, ticket, result_path = session.confirm(
         session.preview["confirmation"], now_ms=NOW + 1)
     assert ticket_path.is_file()
@@ -118,6 +131,7 @@ def test_desktop_live_handoff_writes_ticket_without_calling_mcp(tmp_path):
 
 def test_desktop_live_terminal_import_commits_fill_ledger(tmp_path):
     plan_path, _ = candidate(tmp_path)
+    initialize_risk(tmp_path)
     session = prepare_desktop_live_handoff(
         plan_path, verified_receipt(), tmp_path, now_ms=NOW)
     _, ticket, result_path = session.confirm(
@@ -133,6 +147,7 @@ def test_desktop_live_terminal_import_commits_fill_ledger(tmp_path):
 
 def test_desktop_live_cancel_before_confirmation_is_safe(tmp_path):
     plan_path, _ = candidate(tmp_path)
+    initialize_risk(tmp_path)
     session = prepare_desktop_live_handoff(
         plan_path, verified_receipt(), tmp_path, now_ms=NOW)
     session.cancel(); session.cancel()
@@ -142,6 +157,7 @@ def test_desktop_live_cancel_before_confirmation_is_safe(tmp_path):
 
 def test_desktop_live_wrong_confirmation_writes_nothing(tmp_path):
     plan_path, _ = candidate(tmp_path)
+    initialize_risk(tmp_path)
     session = prepare_desktop_live_handoff(
         plan_path, verified_receipt(), tmp_path, now_ms=NOW)
     with pytest.raises(RuntimeError, match="mismatch"):
@@ -149,3 +165,11 @@ def test_desktop_live_wrong_confirmation_writes_nothing(tmp_path):
     assert session.ticket is None
     assert not list((tmp_path / "live").glob("ticket-*.json"))
     session.cancel()
+
+
+def test_desktop_live_refuses_missing_confirmed_equity_baseline(tmp_path):
+    plan_path, _ = candidate(tmp_path)
+    with pytest.raises(RuntimeError, match="Confirmed MCP equity baseline"):
+        prepare_desktop_live_handoff(
+            plan_path, verified_receipt(), tmp_path, now_ms=NOW)
+    assert not list((tmp_path / "live").glob("ticket-*.json"))

@@ -15,9 +15,10 @@ from .mcp_execution_handoff import (build_submission_ticket,
                                     write_submission_ticket)
 from .mcp_execution_result import (import_execution_result,
                                    load_execution_result_receipt)
+from .mcp_equity_guard import McpSpotEquityGuard
 from .mcp_host_receipt import VerifiedSpotHostReceipt
 from .mcp_spot_snapshot import LocalRiskMetrics
-from .spot_accounting import SpotFillLedger
+from .spot_accounting import SpotFillLedger, fill_risk_stats
 
 
 class DesktopMcpLiveHandoff:
@@ -25,7 +26,7 @@ class DesktopMcpLiveHandoff:
 
     def __init__(self, plan, receipt, evidence, executor, lock, preview,
                  ticket_dir: Path, ledger_path: Path,
-                 daily_equity_loss: Decimal):
+                 cumulative_equity_loss: Decimal):
         self.plan = plan
         self.receipt = receipt
         self.evidence = evidence
@@ -34,7 +35,7 @@ class DesktopMcpLiveHandoff:
         self.preview = preview
         self.ticket_dir = ticket_dir
         self.ledger_path = ledger_path
-        self.daily_equity_loss = daily_equity_loss
+        self.cumulative_equity_loss = cumulative_equity_loss
         self.ticket = None
         self.ticket_path = None
         self.result_path = None
@@ -88,7 +89,8 @@ class DesktopMcpLiveHandoff:
         try:
             return import_execution_result(
                 receipt, self.ticket, self.executor, ledger,
-                daily_equity_loss=self.daily_equity_loss, now_ms=current)
+                daily_equity_loss=self.cumulative_equity_loss,
+                now_ms=current)
         finally:
             self.close()
 
@@ -111,28 +113,36 @@ def prepare_desktop_live_handoff(
     receipt: VerifiedSpotHostReceipt,
     runtime_dir: Path,
     *,
-    daily_equity_loss: Decimal = Decimal("0"),
     now_ms: int | None = None,
 ) -> DesktopMcpLiveHandoff:
     """Prepare one real, user-confirmed file handoff without dispatching it."""
     if (not isinstance(plan_path, Path)
             or not isinstance(receipt, VerifiedSpotHostReceipt)
-            or not isinstance(runtime_dir, Path)
-            or not isinstance(daily_equity_loss, Decimal)
-            or not daily_equity_loss.is_finite() or daily_equity_loss < 0):
+            or not isinstance(runtime_dir, Path)):
         raise ValueError("Invalid MCP desktop live input")
     current = now_ms if now_ms is not None else int(
         datetime.now(timezone.utc).timestamp() * 1000)
     plan = load_mcp_plan(plan_path)
     if plan.symbol != receipt.symbol:
         raise ValueError("MCP live plan and receipt symbol mismatch")
+    live_dir = runtime_dir / "live"
+    risk_path = live_dir / f"{plan.symbol.lower()}-equity-risk.json"
+    with McpSpotEquityGuard(
+            risk_path, account_ref=receipt.account_ref,
+            account_fingerprint=receipt.account_fingerprint,
+            symbol=receipt.symbol) as guard:
+        equity_risk = guard.observe(receipt)
     risk_day = datetime.fromtimestamp(
         receipt.observed_at_ms / 1000, timezone.utc).date().isoformat()
-    evidence = receipt.to_evidence(
-        risk_day=risk_day, risk=LocalRiskMetrics(daily_equity_loss))
+    stats = fill_risk_stats(
+        receipt.tool_results["spot.myTrades"], receipt.symbol,
+        receipt.base_asset, receipt.quote_asset, risk_day)
+    metrics = LocalRiskMetrics(
+        equity_risk.cumulative_loss, stats.daily_entries,
+        stats.consecutive_losses, stats.last_entry_ms)
+    evidence = receipt.to_evidence(risk_day=risk_day, risk=metrics)
     rules = SpotMarketRules.from_exchange_info(
         receipt.tool_results["spot.exchangeInfo"], plan.symbol)
-    live_dir = runtime_dir / "live"
     journal_path = live_dir / f"{plan.signal_fingerprint}-execution.json"
     lock = ExecutionLock(journal_path.with_suffix(".json.lock"))
     lock.require()
@@ -140,7 +150,7 @@ def prepare_desktop_live_handoff(
         budget = Decimal(plan.order_arguments.get("quoteOrderQty", "100"))
         policy = AutomationPolicy(AutomationPolicyConfig(
             order_budget_quote=budget, cumulative_loss_limit=Decimal("10"),
-            max_position_cost=Decimal("100000"), max_daily_entries=20,
+            max_position_cost=budget, max_daily_entries=20,
             max_consecutive_losses=3, entry_cooldown_seconds=60,
             snapshot_max_age_seconds=15))
         executor = ConfirmedSpotExecutor(
@@ -153,7 +163,7 @@ def prepare_desktop_live_handoff(
         return DesktopMcpLiveHandoff(
             plan, receipt, evidence, executor, lock, preview, live_dir,
             live_dir / f"{receipt.symbol.lower()}-fills.json",
-            daily_equity_loss)
+            equity_risk.cumulative_loss)
     except Exception:
         lock.release()
         raise

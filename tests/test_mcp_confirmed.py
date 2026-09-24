@@ -210,12 +210,22 @@ def test_sell_continues_after_buy_loss_latch(executor):
     assert result.status == "FILLED" and caller.calls[0][1]["side"] == "SELL"
 
 
-def test_sell_dust_fails_closed_without_silent_rounding(executor):
+def test_sell_retains_only_untradable_dust(executor):
     engine,caller,_=executor
-    with pytest.raises(ValueError, match="dust"):
-        engine.preview(intent(True), evidence(position_quantity=Decimal("1.0001")),
-                       rules(),signal_key="exit:1",now_ms=NOW)
-    assert engine.journal.records() == () and caller.calls == []
+    plan=engine.preview(intent(True), evidence(position_quantity=Decimal("1.0001")),
+                        rules(),signal_key="exit:1",now_ms=NOW)
+    assert Decimal(plan["arguments"]["quantity"]) == Decimal("1")
+    assert caller.calls == []
+
+
+def test_sell_does_not_silently_leave_another_tradable_lot(executor):
+    engine,caller,_=executor
+    limited=replace(rules(),max_quantity=Decimal("1"))
+    with pytest.raises(ValueError, match="residual remains tradable"):
+        engine.preview(intent(True),
+                       evidence(position_quantity=Decimal("2")), limited,
+                       signal_key="exit:1", now_ms=NOW)
+    assert caller.calls == []
 
 
 def test_rules_reject_below_minimum_notional(executor):
@@ -245,6 +255,32 @@ def test_exchange_rules_parse_verified_market_filters():
     info["symbols"][0]["status"]="BREAK"
     with pytest.raises(ValueError,match="unavailable"):
         SpotMarketRules.from_exchange_info(info,"BTCUSDT")
+
+
+def test_btc_market_lot_maximum_is_supported_without_ignoring_lot_step():
+    info={"symbols":[{"symbol":"BTCUSDT","baseAsset":"BTC",
+        "quoteAsset":"USDT","status":"TRADING",
+        "isSpotTradingAllowed":True,"quoteOrderQtyMarketAllowed":True,
+        "orderTypes":["MARKET"],"filters":[
+            {"filterType":"LOT_SIZE","minQty":"0.00001000",
+             "maxQty":"9000.00000000","stepSize":"0.00001000"},
+            {"filterType":"MARKET_LOT_SIZE","minQty":"0.00000000",
+             "maxQty":"113.89715343","stepSize":"0.00000000"},
+            {"filterType":"NOTIONAL","minNotional":"5.00000000",
+             "applyMinToMarket":True,"maxNotional":"9000000.00000000",
+             "applyMaxToMarket":False}]}]}
+    parsed=SpotMarketRules.from_exchange_info(info,"BTCUSDT")
+    assert parsed.max_quantity == Decimal("113.89715343")
+    sell=replace(intent(True), reference_price=Decimal("86148.91"))
+    state=evidence(position_quantity=Decimal("0.00011"))
+    assert Decimal(parsed.arguments(sell,state,Decimal("100"),"preview")["quantity"]) == Decimal("0.00011")
+    rounded=parsed.arguments(sell,evidence(position_quantity=Decimal("0.00011988")),
+                             Decimal("100"),"preview")
+    assert Decimal(rounded["quantity"]) == Decimal("0.00011")
+    info["symbols"][0]["filters"][1]["stepSize"]="0.00002000"
+    stepped=SpotMarketRules.from_exchange_info(info,"BTCUSDT")
+    assert Decimal(stepped.arguments(sell,state,Decimal("100"),
+                                     "preview")["quantity"]) == Decimal("0.00010")
 
 
 def test_preview_return_cannot_mutate_actual_order(executor):

@@ -25,14 +25,18 @@ This project no longer attempts to become a new Binance OAuth client. The workin
 
 - `bstock-mcp-request --symbol BTCUSDT`：只写一个限时、只读、无凭据的账户核对请求。
 - `bstock-mcp-import`：核对Codex回执并生成本地已验证快照；首次账户指纹必须显式登记。
-- `bstock-mcp-plan --symbol NVDAB --amount 100`：仅在策略产生可执行信号且账户指纹已登记时写schema v3候选计划；不能直接下单。
+- `bstock-mcp-cycle --verified-snapshot <新鲜回执>`：在现有权益基线和完整成交账本上重算 BTCUSDT 策略，把信号交给持久会话，最多生成一个无凭据候选；不调用 MCP 写工具。
+- `bstock-mcp-host-cycle --request <读取请求>`（脱敏JSON由标准输入提供）：已有账户绑定下，在一个本地进程内严格导入宿主回执并运行上述策略周期，减少15秒回执窗口内的文件交接耗时；仍需Codex宿主完成MCP读取和提供脱敏JSON。
+- `bstock-mcp-plan --symbol BTCUSDT --amount 100 --verified-snapshot runtime\mcp\latest-verified-snapshot.json`：仅在账户快照新鲜且策略产生有效信号时写schema v3候选计划；不能直接下单。
 - 桌面“账户”页只导出读取请求，不弹出Binance登录页。
 - `mcp_spot_snapshot.py`、账本和风控模块严格校验宿主返回的脱敏结果。
 - 本地没有API Key回退；如MCP无法满足无人值守要求，必须另行讨论并明确批准其他接口。
 
 - `bstock-mcp-request --symbol BTCUSDT` writes a short-lived, read-only, credential-free reconciliation request.
 - `bstock-mcp-import` verifies a Codex receipt and writes a local verified snapshot; first-account fingerprint enrollment must be explicit.
-- `bstock-mcp-plan --symbol NVDAB --amount 100` writes a schema-v3 candidate only for an actionable signal and enrolled account; it is not directly dispatchable.
+- `bstock-mcp-cycle --verified-snapshot <fresh receipt>` re-evaluates the BTCUSDT strategy against the established equity baseline and complete fill ledger, then hands the signal to the durable session for at most one credential-free candidate. It never calls a private MCP write tool.
+- `bstock-mcp-host-cycle --request <read request>` consumes sanitized JSON on stdin, verifies it, and runs the same cycle in one local process against an already-enrolled account. Codex must still perform the MCP reads and supply the JSON; this reduces handoff delay within the 15-second freshness window.
+- `bstock-mcp-plan --symbol BTCUSDT --amount 100 --verified-snapshot runtime\mcp\latest-verified-snapshot.json` writes a schema-v3 candidate only with fresh account evidence and an actionable signal; it is not directly dispatchable.
 - The desktop Account tab exports a request and never opens Binance login.
 - Snapshot, ledger and risk modules strictly validate sanitized host results.
 - There is no API-key fallback. Any alternative requires a separate decision and explicit approval.
@@ -42,6 +46,8 @@ This project no longer attempts to become a new Binance OAuth client. The workin
 读取请求到达后，Codex必须使用当前已经授权的Binance MCP连接，核对所选Agentic账户、余额、挂单、完整成交/订单分页、手续费、交易规则和盘口。候选计划必须重新检查时效、账户指纹、余额、交易规则和最终参数；确认被消费并且本地日志原子进入`SUBMITTING`后，才允许生成最多15秒的单次提交票据。任何失败都关闭本次动作，不创建新账户、不重新走项目OAuth，也不静默切换到Agentic Wallet或API。
 
 For a read request, Codex uses the already-authorized Binance MCP connection and verifies the selected Agentic account, balances, open orders, complete fill/order history, commission, exchange rules and book. A candidate must be revalidated against freshness, account fingerprint, funds, rules and final arguments. Only consumed confirmation plus durable `SUBMITTING` may produce a one-shot ticket valid for at most 15 seconds. Failure never creates an account, starts project OAuth or silently falls back to Wallet/API.
+
+**后台宿主限制 / Headless-host limit.** 2026-09-23 本机只读测试确认 Codex CLI 配有现有MCP，但非交互模式的默认审批策略拒绝通用 `tool_execute`；该工具既可转发读取也可转发写入，因此不能为自动读取而整体放行。当前的单次真实策略周期由交互式 Codex 宿主完成，尚不是无人值守服务。/ The local Codex CLI has the existing MCP configured, but its non-interactive default approval policy rejected generic `tool_execute`. Because that dispatcher can forward both reads and writes, blanket approval is unsafe. The verified live strategy cycle used the interactive Codex host, not an unattended service.
 
 ## 读取回执闭环 / Read-receipt loop
 
@@ -61,6 +67,7 @@ bstock-mcp-import `
 ```
 
 6. 以后不再使用`--enroll-account`。桌面“导入Codex回执”会拒绝不同账户指纹、过期请求、不完整分页、缺失工具、UID/凭据泄露和无法由成交解释的余额。
+7. 若要让当前策略会话处理这次刷新，优先把脱敏JSON直接交给 `bstock-mcp-host-cycle --request runtime\desktop\mcp\btcusdt-read-request.json --binding-file runtime\desktop\mcp\account-binding.json --verified-snapshot runtime\desktop\mcp\btcusdt-verified-snapshot.json --runtime-dir runtime\desktop\mcp` 的标准输入。原有 `bstock-mcp-import` 加 `bstock-mcp-cycle` 两步方式仍可用，但真实读取后分开交接曾超过15秒而被安全拒绝。任何路径都不得重写实际观察时间以绕过时限。命令可能返回 `HOLD`、`BLOCKED` 或候选文件；候选仍须经过逐笔确认和一次性票据，绝不直接下单。
 
 1. Run `bstock-mcp-request --symbol BTCUSDT` or export a request from the desktop.
 2. The current Codex task consumes the JSON through the existing Binance MCP connection and fully paginates fills/orders.
@@ -68,6 +75,7 @@ bstock-mcp-import `
 4. Codex writes the strict receipt to the `*-host-receipt.json` path shown by the desktop. No UID, token, API key, password, private key or seed phrase is allowed.
 5. The user verifies the existing Agentic account in Binance and explicitly runs the first import with `--enroll-account`.
 6. Later imports omit enrollment. The desktop rejects changed account fingerprints, expired/mismatched requests, incomplete pagination, missing tools, credential/UID leakage and balances not explained by fills.
+7. To feed a refresh into the durable session, prefer handing the sanitized JSON on stdin to `bstock-mcp-host-cycle` with the existing request, binding, verified-snapshot, and runtime paths. The two-step import plus `bstock-mcp-cycle` remains available, but one live handoff exceeded 15 seconds and correctly failed closed. Never alter the actual observation time to extend the window. A candidate still requires per-order confirmation and a one-shot ticket; this command never submits it.
 
 ### 给Codex宿主的任务模板 / Codex-host task template
 
@@ -84,6 +92,6 @@ pagination的trades_complete/orders_complete只有在确实完整时才能为tru
 
 ## 当前验收边界 / Current acceptance boundary
 
-历史上已经通过Codex宿主完成真实只读核对和一笔约10 USDT的BTC买入。2026-09-21又使用当前代码的新回执格式完成一次真实`BTCUSDT`只读闭环：无凭据请求、7项MCP读取、完整分页、内存指纹计算、UID删除、显式首次绑定和本地严格导入全部通过，且没有调用任何写工具。自动策略到真实MCP订单的持续编排仍需单独验收。
+历史上已经通过Codex宿主完成真实只读核对和一笔约10 USDT的BTC买入。2026-09-21又使用当前代码的新回执格式完成一次真实`BTCUSDT`只读闭环：无凭据请求、7项MCP读取、完整分页、内存指纹计算、UID删除、显式首次绑定和本地严格导入全部通过。2026-09-23同进程导入/周期入口在真实七项MCP只读刷新后返回策略`HOLD`、持久会话`RUNNING`，没有候选或订单；本地公开行情需有网络访问权限。自动持续唤醒MCP及策略到真实订单的编排仍需单独验收。
 
-The existing Codex-hosted path previously completed live read reconciliation and an approximately 10-USDT BTC buy. On 2026-09-21, the current receipt format also completed a live `BTCUSDT` read loop: credential-free request, all seven MCP reads, complete pagination, in-memory fingerprint derivation, UID removal, explicit first binding and strict local import all passed, with no write tool called. Sustained strategy-to-live-order orchestration remains separate acceptance.
+The existing Codex-hosted path previously completed live read reconciliation and an approximately 10-USDT BTC buy. On 2026-09-21, the current receipt format completed a live `BTCUSDT` read loop: credential-free request, seven MCP reads, complete pagination, in-memory fingerprint derivation, UID removal, explicit first binding and strict local import. On 2026-09-23, the same-process import/cycle returned strategy `HOLD` and durable session `RUNNING` after a fresh live seven-read MCP snapshot, with no candidate or order. The local public-candle feed needs network access. Continuous MCP wake-up and strategy-to-real-order orchestration remain separate acceptance.

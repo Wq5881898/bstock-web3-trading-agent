@@ -67,6 +67,8 @@ class McpReconciliationEvidence:
     consecutive_losses: int = 0
     last_entry_ms: int | None = None
     pending_order_id: str | None = None
+    dust_quantity: Decimal = Decimal("0")
+    dust_cost: Decimal = Decimal("0")
 
     def to_snapshot(self) -> AccountRiskSnapshot:
         flags = (self.account_checked, self.balances_checked,
@@ -92,6 +94,8 @@ class McpReconciliationEvidence:
             consecutive_losses=self.consecutive_losses,
             last_entry_ms=self.last_entry_ms,
             pending_order_id=self.pending_order_id,
+            dust_quantity=self.dust_quantity,
+            dust_cost=self.dust_cost,
         )
 
 

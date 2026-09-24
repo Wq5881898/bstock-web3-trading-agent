@@ -172,8 +172,8 @@ def test_live_mcp_switch_is_off_by_default_and_uses_file_handoff(
 
     def importer(symbol):
         return tmp_path / "verified.json", summary, receipt
-    def live_loader(symbol, verified, loss):
-        events.append(("load-live", symbol, verified, str(loss)))
+    def live_loader(symbol, verified):
+        events.append(("load-live", symbol, verified))
         return LiveSession()
 
     window = create_monitor_class(
@@ -185,13 +185,18 @@ def test_live_mcp_switch_is_off_by_default_and_uses_file_handoff(
         window.mcp_import.click()
         assert not window.mcp_live_prepare.isEnabled()
         window.mcp_live_enabled.setChecked(True)
+        assert not window.mcp_live_prepare.isEnabled()
+        baseline = tmp_path / "mcp" / "live" / "btcusdt-equity-risk.json"
+        baseline.parent.mkdir(parents=True)
+        baseline.write_text("fixture", encoding="utf-8")
+        window.update_mcp_live_controls()
         assert window.mcp_live_prepare.isEnabled()
         window.mcp_live_prepare.click(); app.processEvents()
         dialog = window.order_prompts[0]
         dialog.input.setText(LiveSession.preview["confirmation"])
         dialog.confirm_button.click(); app.processEvents()
         assert events[:2] == [
-            ("load-live", "BTCUSDT", receipt, "0.0"),
+            ("load-live", "BTCUSDT", receipt),
             ("confirm-live", LiveSession.preview["confirmation"])]
         assert window.mcp_live_import.isEnabled()
         window.mcp_live_import.click(); app.processEvents()

@@ -2,25 +2,40 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, replace
+from datetime import datetime, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
 
-from .catalog import BStockCatalogClient
+from .catalog import BinanceExchangeSpotCatalogClient
 from .market_data import BStockMultiTimeframeFeed
 from .mcp_bridge import (build_mcp_spot_plan, load_mcp_account_binding,
     write_mcp_plan)
+from .mcp_host_receipt import load_verified_receipt
 from .strategy import MtfEmaStrategy, PositionView, SignalDecision
+
+
+def _verified_position(snapshot_path: Path, binding, *, symbol: str,
+                       now: datetime) -> tuple[PositionView, Decimal]:
+    receipt = load_verified_receipt(snapshot_path, binding)
+    if receipt.symbol != symbol:
+        raise ValueError("Verified account snapshot symbol mismatch")
+    observed = datetime.fromisoformat(receipt.observed_at.replace("Z", "+00:00"))
+    if observed.tzinfo is None or not 0 <= (now - observed).total_seconds() <= 15:
+        raise ValueError("Verified account snapshot is not fresh")
+    quantity, cost = receipt.tradable_position()
+    entry = cost / quantity if quantity > 0 and cost > 0 else Decimal("0")
+    return PositionView(float(quantity), float(entry)), quantity
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create a credential-free Binance Agent OS MCP Spot order plan"
     )
-    parser.add_argument("--symbol", default="NVDAB")
+    parser.add_argument("--symbol", default="BTCUSDT")
     parser.add_argument("--amount", default="100", help="BUY quote amount in USDT")
-    parser.add_argument("--position-quantity", default="0")
-    parser.add_argument("--entry-price", default="0")
+    parser.add_argument("--verified-snapshot", type=Path, required=True,
+        help="Strictly verified receipt for the existing Agentic account")
     parser.add_argument("--max-age-seconds", type=int, default=45)
     parser.add_argument(
         "--binding-file", type=Path,
@@ -32,9 +47,21 @@ def main() -> int:
         default=Path("runtime") / "mcp" / "latest-order-plan.json",
     )
     args = parser.parse_args()
+    if args.symbol.strip().upper() != "BTCUSDT":
+        parser.error("The current Agent OS MCP prototype supports BTCUSDT only")
+    symbol = "BTCUSDT"
+    binding = load_mcp_account_binding(args.binding_file)
+    if binding.fingerprint is None:
+        parser.error("Agentic account binding is not enrolled")
+    try:
+        position, position_quantity = _verified_position(
+            args.verified_snapshot, binding, symbol=symbol,
+            now=datetime.now(timezone.utc))
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
 
-    catalog = BStockCatalogClient()
-    asset = catalog.resolve(args.symbol)
+    catalog = BinanceExchangeSpotCatalogClient()
+    asset = catalog.resolve(symbol)
     status = catalog.market_status(asset)
     if not status.open_state or status.reason_code != "TRADING":
         result = {
@@ -47,10 +74,16 @@ def main() -> int:
         return 0
 
     snapshot = BStockMultiTimeframeFeed().fetch(asset)
-    position = PositionView(
-        float(Decimal(args.position_quantity)), float(Decimal(args.entry_price))
-    )
     signal = MtfEmaStrategy().evaluate(snapshot, position)
+    # Public market-data fetches can outlive the short account-evidence window.
+    try:
+        checked_position, checked_quantity = _verified_position(
+            args.verified_snapshot, binding, symbol=symbol,
+            now=datetime.now(timezone.utc))
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    if checked_position != position or checked_quantity != position_quantity:
+        parser.error("Verified account position changed during strategy evaluation")
     if not signal.strategy_id:
         signal = replace(signal, strategy_id="mtf")
     if signal.action == "hold":
@@ -64,14 +97,11 @@ def main() -> int:
         return 0
 
     try:
-        binding = load_mcp_account_binding(args.binding_file)
-        if binding.fingerprint is None:
-            raise ValueError("Agentic account binding is not enrolled")
         plan = build_mcp_spot_plan(
             asset,
             signal,
             amount_usdt=Decimal(args.amount),
-            position_quantity=Decimal(args.position_quantity),
+            position_quantity=position_quantity,
             max_age_seconds=args.max_age_seconds,
             account_binding=binding,
         )

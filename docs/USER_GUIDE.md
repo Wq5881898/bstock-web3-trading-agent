@@ -217,7 +217,8 @@ no external-withdrawal scope.
 ### 9.4 从本地信号生成 MCP 计划
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 100
+bstock-mcp-plan --symbol BTCUSDT --amount 100 `
+  --verified-snapshot runtime\mcp\latest-verified-snapshot.json
 ```
 
 - 如果返回 `mcpPlanCreated: false`，本轮结束，不下单。

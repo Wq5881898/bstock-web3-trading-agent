@@ -182,6 +182,14 @@ class McpTradingSession:
             self._persist()
             return McpCandidateResult("BLOCKED", self.phase, decision.reasons)
 
+        sell_quantity = snapshot.position_quantity - snapshot.dust_quantity
+        if signal.action == "sell" and sell_quantity <= 0:
+            self._record_processed(signal_key)
+            self.updated_at_ms = now_ms
+            self._persist()
+            return McpCandidateResult("BLOCKED", self.phase,
+                                      ("no_tradable_position",))
+
         self.pending = {"status": "RESERVING", "signal_key": signal_key,
                         "plan_id": None, "plan_path": None,
                         "side": signal.action.upper(), "created_at_ms": now_ms,
@@ -193,7 +201,7 @@ class McpTradingSession:
             plan = build_mcp_spot_plan(
                 asset, signal,
                 amount_usdt=self.policy_config.order_budget_quote,
-                position_quantity=snapshot.position_quantity,
+                position_quantity=sell_quantity,
                 account_binding=account,
                 now=datetime.fromtimestamp(now_ms / 1000, timezone.utc),
             )

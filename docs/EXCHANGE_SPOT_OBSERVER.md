@@ -15,28 +15,34 @@ The MCP prototype is therefore fixed to `BTCUSDT`: public exchange candles → u
 `bstock-spot-observe`：
 
 - 只调用 Binance 公开 `exchangeInfo` 和 K 线接口；
-- 可读取本地已经严格验证、账户指纹匹配的脱敏回执以构造持仓视图；
-- 每根闭合 K 线最多求值一次，重启后保持去重；
-- 原子保存状态、最新观察和最新非重复 BUY/SELL 证据；
+- 每轮重新读取本地已经严格验证、账户指纹匹配的脱敏回执以构造持仓视图；
+- 只有账户快照新鲜时才把闭合 K 线记为已处理，重启后保持去重；过期快照下的观察可在刷新后重算，不能变成订单候选；
+- 原子保存状态、最新观察和最新非重复 BUY/SELL 证据；持仓证据过期或读取失败时以 `HOLD` 覆盖旧动作文件；
 - 所有输出固定包含 `mode=OBSERVE_ONLY`、`execution_eligible=false`、`transport=null`；
 - 持仓快照超过15秒时明确标记不新鲜；
+- 已核验的交易规则用于区分可交易持仓与不可交易 dust；观察策略只使用可交易部分，原始余额和成本仍完整保留在回执与账本；
 - 不调用 MCP、不生成提交票据、不访问 API Key、不下单。
 
 `bstock-spot-observe`:
 
 - calls only public Binance `exchangeInfo` and candle endpoints;
-- may read a locally verified sanitized receipt whose account fingerprint matches, solely to construct the position view;
-- evaluates each closed candle at most once and preserves deduplication across restarts;
-- atomically saves state, the latest observation, and the latest non-duplicate BUY/SELL evidence;
+- re-reads a locally verified sanitized receipt whose account fingerprint matches on each poll, solely to construct the position view;
+- marks a closed candle processed only with fresh account evidence and preserves deduplication across restarts; an observation with stale evidence may be re-evaluated after a refresh and cannot become an order candidate;
+- atomically saves state, the latest observation, and the latest non-duplicate BUY/SELL evidence; stale or unreadable position evidence replaces any previous action file with `HOLD`;
 - always emits `mode=OBSERVE_ONLY`, `execution_eligible=false`, and `transport=null`;
 - marks a position snapshot stale after 15 seconds;
+- uses verified exchange rules to separate tradable position from untradable dust for strategy evaluation, while preserving the raw balance and cost in the receipt and ledger;
 - never calls MCP, creates a submission ticket, accesses an API key, or submits an order.
 
 ## 当前验收 / Current acceptance
 
 真实公开 `BTCUSDT` 1m/5m K 线已进入统一 MTF 策略。使用本地已验证的既有 BTC 持仓视图后，观察器在连续闭合 K 线上产生 `SELL / five_minute_trend_reversed`，重复轮询被去重。由于账户持仓快照过期，这些信号明确不可执行，且没有生成订单候选。
 
+2026-09-22 经用户逐笔确认的 `BTCUSDT` 手动市价 SELL 已由现有 Agent OS MCP 确认成交。这不是策略 SELL 验收。旧持仓回执不再代表成交后账户；观察器即使继续展示原始策略信号，也必须把动作文件置为 `HOLD / position_snapshot_not_fresh`，直到宿主提供新的严格核验回执。公开文档和 Git 提交不记录订单号、UID 或精确余额；本地忽略提交的运行日志保留对账信息。
+
 Real public `BTCUSDT` 1m/5m candles now feed the unified MTF strategy. With the locally verified existing BTC position view, the observer produced `SELL / five_minute_trend_reversed` on successive closed candles and deduplicated repeated polls. Because the position snapshot was stale, the signals were explicitly non-executable and no order candidate was created.
+
+On 2026-09-22, an operator-confirmed manual `BTCUSDT` market SELL was filled through the existing Agent OS MCP. It does not count as the strategy-SELL acceptance. The prior position receipt no longer represents the post-trade account; the observer must mark its action file `HOLD / position_snapshot_not_fresh` until the host supplies a newly verified receipt. Public docs and Git commits omit the order ID, UID, and exact balances; ignored local runtime records retain reconciliation details.
 
 ## 下一道门 / Next gate
 

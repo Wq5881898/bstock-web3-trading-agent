@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from math import lcm
 import re
 import secrets
 
@@ -38,6 +39,7 @@ class SpotMarketRules:
     step_size: Decimal
     min_notional: Decimal
     max_notional: Decimal | None = None
+    market_step_size: Decimal | None = None
 
     def __post_init__(self):
         if any(not isinstance(value, str) or not re.fullmatch(r"[A-Z0-9]{1,32}", value)
@@ -49,6 +51,11 @@ class SpotMarketRules:
                 raise ValueError("Invalid Spot market rules")
         if self.max_quantity < self.min_quantity:
             raise ValueError("Invalid Spot quantity limits")
+        if self.market_step_size is not None and (
+                not isinstance(self.market_step_size, Decimal)
+                or not self.market_step_size.is_finite()
+                or self.market_step_size <= 0):
+            raise ValueError("Invalid Spot market lot step")
         if self.max_notional is not None and (
                 not isinstance(self.max_notional, Decimal)
                 or not self.max_notional.is_finite()
@@ -89,15 +96,24 @@ class SpotMarketRules:
                     maximums.append(number(f.get("maxNotional")))
         if not minimums:
             raise ValueError("Spot notional filter required")
-        # A nonzero MARKET_LOT_SIZE may further constrain LOT_SIZE.
+        # MARKET_LOT_SIZE can tighten the limits; zero disables an individual
+        # bound or step, not the entire filter (BTCUSDT has a nonzero maxQty).
         market = by_type.get("MARKET_LOT_SIZE")
-        if market is not None and any(number(market.get(k)) != 0
-                for k in ("minQty", "maxQty", "stepSize")):
-            raise ValueError("Additional market lot rules require host validation")
+        min_quantity = number(lot.get("minQty"))
+        max_quantity = number(lot.get("maxQty"))
+        market_step = None
+        if market is not None:
+            market_min = number(market.get("minQty"))
+            market_max = number(market.get("maxQty"))
+            market_step = number(market.get("stepSize")) or None
+            if market_min:
+                min_quantity = max(min_quantity, market_min)
+            if market_max:
+                max_quantity = min(max_quantity, market_max)
         return cls(symbol, row.get("baseAsset"), row.get("quoteAsset"),
-            number(lot.get("minQty")), number(lot.get("maxQty")),
+            min_quantity, max_quantity,
             number(lot.get("stepSize")), max(minimums),
-            min(maximums) if maximums else None)
+            min(maximums) if maximums else None, market_step)
 
     def arguments(self, intent, snapshot, budget, client_id):
         instrument = intent.instrument
@@ -112,12 +128,10 @@ class SpotMarketRules:
             amount, notional = budget, budget
             args.update(side="BUY", quoteOrderQty=format(amount, "f"))
         elif intent.action == PositionAction.CLOSE_LONG:
-            amount = (snapshot.position_quantity / self.step_size).to_integral_value(
-                rounding=ROUND_DOWN) * self.step_size
+            amount = self.tradable_quantity(snapshot.position_quantity,
+                                             intent.reference_price)
             if not self.min_quantity <= amount <= self.max_quantity:
                 raise ValueError("Spot sell quantity outside lot limits")
-            if amount != snapshot.position_quantity:
-                raise ValueError("Spot dust accounting required before rounding")
             notional = amount * intent.reference_price
             args.update(side="SELL", quantity=format(amount, "f"))
         else:
@@ -126,6 +140,32 @@ class SpotMarketRules:
                                           and notional > self.max_notional):
             raise ValueError("Spot amount outside notional limits")
         return args
+
+    def tradable_quantity(self, quantity: Decimal,
+                          reference_price: Decimal) -> Decimal:
+        """Return a valid sell quantity, retaining only untradable dust."""
+        if (not isinstance(quantity, Decimal) or not quantity.is_finite()
+                or quantity < 0 or not isinstance(reference_price, Decimal)
+                or not reference_price.is_finite() or reference_price <= 0):
+            raise ValueError("Invalid Spot position or reference price")
+        steps = [self.step_size]
+        if self.market_step_size is not None:
+            steps.append(self.market_step_size)
+        precision = max(0, *(-step.as_tuple().exponent for step in steps))
+        if precision > 18:
+            raise ValueError("Spot lot precision exceeds safe limit")
+        scale = 10 ** precision
+        common_units = lcm(*(int(step * scale) for step in steps))
+        common_step = Decimal(common_units) / Decimal(scale)
+        amount = (min(quantity, self.max_quantity) / common_step).to_integral_value(
+            rounding=ROUND_DOWN) * common_step
+        if amount < self.min_quantity or amount * reference_price < self.min_notional:
+            return Decimal("0")
+        residual = quantity - amount
+        if (residual >= self.min_quantity
+                and residual * reference_price >= self.min_notional):
+            raise ValueError("Spot residual remains tradable; split order required")
+        return amount
 
 
 @dataclass(frozen=True)

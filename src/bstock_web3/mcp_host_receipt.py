@@ -1,7 +1,7 @@
 """Strict import boundary for sanitized results from the supported Codex host."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
@@ -15,6 +15,7 @@ from .mcp_bridge import (MCP_HOST, MCP_SPOT_READ_TOOLS, MCP_TRANSPORT,
     McpAccountBinding, McpSpotReadRequest)
 from .mcp_spot_snapshot import (LocalRiskMetrics,
     build_bound_mcp_spot_evidence)
+from .mcp_confirmed import SpotMarketRules
 
 
 RESULT_OPERATION = "READ_SPOT_SNAPSHOT_RESULT"
@@ -93,7 +94,7 @@ class VerifiedSpotHostReceipt:
 
     def to_evidence(self, *, risk_day: str,
                     risk: LocalRiskMetrics):
-        return build_bound_mcp_spot_evidence(
+        evidence = build_bound_mcp_spot_evidence(
             account=self.tool_results["spot.getAccount"],
             open_orders=self.tool_results["spot.getOpenOrders"],
             trades=self.tool_results["spot.myTrades"],
@@ -105,6 +106,27 @@ class VerifiedSpotHostReceipt:
             observed_at_ms=self.observed_at_ms,
             evidence_id=f"host-{self.request_id}", risk=risk,
             trade_history_complete=True)
+        info = self.tool_results["spot.exchangeInfo"]
+        rows = info.get("symbols") if isinstance(info, dict) else None
+        if (isinstance(rows, list) and len(rows) == 1
+                and isinstance(rows[0], dict) and "filters" in rows[0]):
+            rules = SpotMarketRules.from_exchange_info(info, self.symbol)
+            bid = Decimal(self.tool_results["spot.tickerBookTicker"]["bidPrice"])
+            tradable = rules.tradable_quantity(evidence.position_quantity, bid)
+            dust = evidence.position_quantity - tradable
+            dust_cost = (evidence.position_cost * dust / evidence.position_quantity
+                         if evidence.position_quantity else Decimal("0"))
+            evidence = replace(evidence, dust_quantity=dust,
+                               dust_cost=dust_cost)
+        return evidence
+
+    def tradable_position(self) -> tuple[Decimal, Decimal]:
+        evidence = self.to_evidence(
+            risk_day=_timestamp(self.observed_at, "receipt observation time")
+                .date().isoformat(),
+            risk=LocalRiskMetrics(Decimal("0")))
+        return (evidence.position_quantity - evidence.dust_quantity,
+                evidence.position_cost - evidence.dust_cost)
 
     def summary(self) -> dict[str, Any]:
         evidence = self.to_evidence(

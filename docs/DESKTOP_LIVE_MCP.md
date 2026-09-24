@@ -4,6 +4,21 @@
 
 The Account tab now exposes an **off-by-default** “Enable live MCP ticket” switch. It reuses the existing Agentic account receipt and per-action confirmation dialog. It creates no account, starts no OAuth, requests no API key, and performs no direct MCP call from the desktop process.
 
+界面的“演练累计亏损”仅影响演练，不再进入真实票据。真实票据现在要求通过 `bstock-mcp-risk` 对现有 Agentic 账户建立一次明确确认的权益基线；此后每次新鲜账户回执自动计算会话累计权益亏损。两次回执之间若 BTC/USDT 余额变化无法由完整成交历史解释，就失败关闭，须人工核查；不会自动假定转账为盈亏。权益基线尚未建立或已过期时，不能生成真实票据。该保护不等于持续 MCP 宿主编排已完成。
+
+The UI's “rehearsal loss” affects rehearsal only and no longer enters a live ticket. Live tickets now require an explicitly confirmed baseline for the existing Agentic account through `bstock-mcp-risk`. Each fresh account receipt then computes cumulative session equity loss. If a BTC/USDT balance change cannot be explained by complete fills, the guard fails closed for manual review; it never silently treats a transfer as PnL. No baseline or a stale receipt means no live ticket. This guard does not complete continuous MCP-host orchestration.
+
+首次设立基线时，在当前已授权 Codex 宿主完成七项只读刷新并严格导入新回执后，先预览，再由操作者确认基线（两个命令都不下单）。现有 BTCUSDT 会话已于 2026-09-23 建立基线，不应重复初始化；后续新鲜回执使用 `bstock-mcp-risk check` 核对累计亏损。
+
+```powershell
+bstock-mcp-risk preview --verified-snapshot runtime\desktop\mcp\btcusdt-verified-snapshot.json
+bstock-mcp-risk initialize --verified-snapshot runtime\desktop\mcp\btcusdt-verified-snapshot.json --confirm-baseline 'CONFIRM BTCUSDT EQUITY BASELINE'
+```
+
+After the existing authorized Codex host refreshes all seven reads and imports a verified receipt, preview and then explicitly confirm the baseline with the commands above. Neither command submits an order. The receipt must be no older than 60 seconds; the order preflight still requires at most 15 seconds.
+
+The current BTCUSDT session established its baseline on 2026-09-23. Do not initialize it again; use `bstock-mcp-risk check` with a new verified receipt to update cumulative loss.
+
 ## 操作顺序 / Operator sequence
 
 1. 导出读取请求，让当前已授权的 Codex 任务通过现有 Binance MCP 完成七项读取。

@@ -175,11 +175,11 @@ def prepare_desktop_rehearsal(
     lock = ExecutionLock(journal_path.with_suffix(".json.lock"))
     lock.require()
     try:
+        budget = Decimal(plan.order_arguments.get("quoteOrderQty", "100"))
         policy = AutomationPolicy(AutomationPolicyConfig(
-            order_budget_quote=Decimal(plan.order_arguments.get(
-                "quoteOrderQty", "100")),
+            order_budget_quote=budget,
             cumulative_loss_limit=Decimal("10"),
-            max_position_cost=Decimal("100000"),
+            max_position_cost=budget,
             max_daily_entries=20, max_consecutive_losses=3,
             entry_cooldown_seconds=60, snapshot_max_age_seconds=15))
         executor = ConfirmedSpotExecutor(

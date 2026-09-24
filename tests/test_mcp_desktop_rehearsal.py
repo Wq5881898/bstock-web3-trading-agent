@@ -67,6 +67,7 @@ def test_rehearsal_consumes_exact_confirmation_without_dispatch_ticket(tmp_path)
     path, plan = candidate(tmp_path)
     session = prepare_desktop_rehearsal(path, verified_receipt(), tmp_path,
         now_ms=NOW)
+    assert session.executor.policy.config.max_position_cost == Decimal("10")
     fingerprint = session.preview["arguments"]["newClientOrderId"]
     output, report = session.confirm(session.preview["confirmation"],
                                      now_ms=NOW + 1)

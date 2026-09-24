@@ -108,6 +108,38 @@ def test_loss_latch_blocks_buy_but_allows_sell(tmp_path):
     assert sell.plan.order_arguments["quantity"] == "0.25"
 
 
+def test_sell_candidate_excludes_reconciled_dust(tmp_path):
+    session = started(tmp_path, position_quantity=Decimal("0.00011988"),
+                      position_cost=Decimal("9.5"),
+                      dust_quantity=Decimal("0.00000988"),
+                      dust_cost=Decimal("0.78"))
+    result = session.prepare_candidate(
+        ASSET, signal("sell"), evidence(
+            position_quantity=Decimal("0.00011988"),
+            position_cost=Decimal("9.5"),
+            dust_quantity=Decimal("0.00000988"),
+            dust_cost=Decimal("0.78")),
+        ACCOUNT, output_dir=tmp_path / "candidates", now_ms=NOW + 1)
+    assert result.status == "READY"
+    assert Decimal(result.plan.order_arguments["quantity"]) == Decimal("0.00011")
+
+
+def test_dust_only_sell_signal_creates_no_candidate(tmp_path):
+    session = started(tmp_path, position_quantity=Decimal("0.00000988"),
+                      position_cost=Decimal("0.78"),
+                      dust_quantity=Decimal("0.00000988"),
+                      dust_cost=Decimal("0.78"))
+    result = session.prepare_candidate(
+        ASSET, signal("sell"), evidence(
+            position_quantity=Decimal("0.00000988"),
+            position_cost=Decimal("0.78"),
+            dust_quantity=Decimal("0.00000988"),
+            dust_cost=Decimal("0.78")),
+        ACCOUNT, output_dir=tmp_path / "candidates", now_ms=NOW + 1)
+    assert result.status == "BLOCKED"
+    assert result.reasons == ("no_tradable_position",)
+
+
 def test_manual_resume_never_bypasses_active_loss(tmp_path):
     session = started(tmp_path, daily_equity_loss=Decimal("10"))
     blocked = session.request_manual_resume(

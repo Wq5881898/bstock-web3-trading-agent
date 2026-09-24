@@ -35,6 +35,18 @@ def test_defaults_match_agreed_100_order_and_10_cumulative_loss():
         now_ms=NOW).allowed
 
 
+def test_buy_position_cap_excludes_only_verified_dust_cost():
+    raw = snapshot(position_quantity=Decimal("0.00000988"),
+        position_cost=Decimal("0.85"))
+    assert "position_cost_limit" in AutomationPolicy().evaluate(
+        intent("buy"), raw, now_ms=NOW).reasons
+    dust = replace(raw, dust_quantity=raw.position_quantity,
+                   dust_cost=raw.position_cost)
+    assert AutomationPolicy().evaluate(intent("buy"), dust, now_ms=NOW).allowed
+    with pytest.raises(ValueError, match="Dust exceeds"):
+        replace(raw, dust_cost=Decimal("1"))
+
+
 def test_cumulative_loss_latches_buys_but_never_suppresses_signal_exit():
     policy = AutomationPolicy()
     buy = policy.evaluate(intent("buy"), snapshot(daily_equity_loss=Decimal("10")),

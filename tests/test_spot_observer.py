@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 
 import pytest
 
@@ -58,7 +59,9 @@ def test_observer_writes_transport_free_signal_and_deduplicates_bar(tmp_path):
     assert first["symbol"] == "BTCUSDT"
     assert first["signal"]["action"] == "buy"
     assert first["signal"]["strategy_id"] == "mtf"
-    assert config(tmp_path).action_output_path.exists()
+    action = json.loads(config(tmp_path).action_output_path.read_text("utf-8"))
+    assert action["signal"]["action"] == "hold"
+    assert action["signal"]["reason"] == "position_snapshot_not_fresh"
     second = observer.evaluate_once(PositionView(), now=NOW)
     assert second["duplicate_bar"]
     assert second["signal"]["action"] == "hold"
@@ -73,6 +76,43 @@ def test_observer_marks_old_position_snapshot_non_executable(tmp_path):
         now=NOW)
     assert result["position_snapshot_fresh"] is False
     assert result["execution_eligible"] is False
+    action = json.loads(config(tmp_path).action_output_path.read_text("utf-8"))
+    assert action["signal"]["action"] == "hold"
+    assert not config(tmp_path).state_path.exists()
+    refreshed = SpotSignalObserver(
+        config(tmp_path), catalog=Catalog(), feed=Feed(), strategy=Strategy())
+    fresh = refreshed.evaluate_once(
+        PositionView(), position_observed_at=NOW.isoformat(), now=NOW)
+    assert fresh["duplicate_bar"] is False
+    assert fresh["signal"]["action"] == "buy"
+
+
+def test_observer_replaces_previous_action_when_position_becomes_stale(tmp_path):
+    cfg = config(tmp_path)
+    observer = SpotSignalObserver(
+        cfg, catalog=Catalog(), feed=Feed(), strategy=Strategy())
+    observer.evaluate_once(
+        PositionView(), position_observed_at=NOW.isoformat(), now=NOW)
+    action = json.loads(cfg.action_output_path.read_text("utf-8"))
+    assert action["signal"]["action"] == "buy"
+    observer.evaluate_once(
+        PositionView(), position_observed_at=(NOW - timedelta(minutes=1)).isoformat(),
+        now=NOW + timedelta(minutes=1))
+    action = json.loads(cfg.action_output_path.read_text("utf-8"))
+    assert action["signal"]["action"] == "hold"
+    assert action["signal"]["reason"] == "position_snapshot_not_fresh"
+
+
+def test_observer_invalidates_action_when_snapshot_read_fails(tmp_path):
+    cfg = config(tmp_path)
+    observer = SpotSignalObserver(
+        cfg, catalog=Catalog(), feed=Feed(), strategy=Strategy())
+    observer.evaluate_once(
+        PositionView(), position_observed_at=NOW.isoformat(), now=NOW)
+    observer.invalidate_action_output("position_snapshot_unavailable")
+    action = json.loads(cfg.action_output_path.read_text("utf-8"))
+    assert action["signal"]["action"] == "hold"
+    assert action["position_snapshot_fresh"] is False
 
 
 def test_observer_restart_preserves_deduplication_and_binding(tmp_path):

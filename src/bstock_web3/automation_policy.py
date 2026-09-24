@@ -66,6 +66,8 @@ class AccountRiskSnapshot:
     consecutive_losses: int = 0
     last_entry_ms: int | None = None
     pending_order_id: str | None = None
+    dust_quantity: Decimal = Decimal("0")
+    dust_cost: Decimal = Decimal("0")
 
     def __post_init__(self):
         if not isinstance(self.account_ref, str) or not self.account_ref.strip():
@@ -83,10 +85,13 @@ class AccountRiskSnapshot:
         if type(self.reconciled) is not bool or type(self.can_trade) is not bool:
             raise ValueError("Invalid account flags")
         for name in ("available_quote", "position_quantity", "position_cost",
-                     "daily_equity_loss"):
+                     "daily_equity_loss", "dust_quantity", "dust_cost"):
             value = getattr(self, name)
             if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
                 raise ValueError(f"Invalid {name}")
+        if (self.dust_quantity > self.position_quantity
+                or self.dust_cost > self.position_cost):
+            raise ValueError("Dust exceeds reconciled Spot position")
         for name in ("daily_entries", "consecutive_losses"):
             value = getattr(self, name)
             if type(value) is not int or value < 0:
@@ -140,7 +145,8 @@ class AutomationPolicy:
             reasons.append("buy_paused:" + self.buy_pause_reason)
         if snapshot.available_quote < self.config.order_budget_quote:
             reasons.append("insufficient_quote_balance")
-        if (snapshot.position_cost + self.config.order_budget_quote
+        if (snapshot.position_cost - snapshot.dust_cost
+                + self.config.order_budget_quote
                 > self.config.max_position_cost):
             reasons.append("position_cost_limit")
         if (snapshot.last_entry_ms is not None and now_ms - snapshot.last_entry_ms

@@ -20,6 +20,8 @@
 
 The final product goal is a once-started session that continuously reads markets, evaluates the selected strategy and risk, and emits real-trade candidates until stopped. Real orders use only the existing Codex MCP connection and existing Agentic sub-account, with per-action confirmation required by Binance Agentic MCP. The [product baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) are the highest-priority sources.
 
+**当前阶段结论 / Current milestone:** 本仓库提供对话式 MCP 交易交接、离线策略/风控/恢复契约及只读单次策略周期；并未完成持续唤醒 MCP 宿主、策略自动真实 BUY/SELL 或 24 小时监督验收。相关安全资产已整理供 Alpha2 吸收，详见[阶段收口记录](docs/STAGE_CLOSEOUT_20260924.md)。/ The repository provides conversational MCP handoff, offline strategy/risk/recovery contracts, and a read-only one-shot strategy cycle. Continuous MCP-host orchestration, strategy-driven live BUY/SELL, and 24-hour supervised acceptance remain unimplemented; see the [milestone closeout](docs/STAGE_CLOSEOUT_20260924.md).
+
 ## 核心功能 / Key Features
 
 - Binance 公共 bStock 目录、合约地址和实时市场状态发现。<br>
@@ -250,15 +252,21 @@ Fixed-Range public-feed paper smoke (no account and no real orders):
 ### 生成 Agent OS MCP 订单计划 / Create an Agent OS MCP Plan
 
 ```powershell
-bstock-mcp-plan --symbol NVDAB --amount 100
+bstock-mcp-plan --symbol BTCUSDT --amount 100 `
+  --verified-snapshot runtime\mcp\latest-verified-snapshot.json
 ```
 
-该命令要求先通过只读回执完成Agentic账户指纹登记。如果策略返回 `hold`，程序不会创建订单计划。只有包含统一策略ID和稳定事件时间的 `buy` 或 `sell` 信号才会在`runtime/mcp/`下生成schema v3短时候选计划。候选计划绑定账户指纹和稳定信号指纹，但没有最终客户端订单ID，不能直接提交。
+该命令仅支持当前交易所 Spot 原型 `BTCUSDT`，并要求已登记的 Agentic 账户指纹和不超过 15 秒的严格核验账户快照；不再接受手填持仓。快照过期、评估期间持仓变化或策略返回 `hold` 时，不会创建订单计划。有效 `buy`/`sell` 信号才会在 `runtime/mcp/` 下生成 schema v3 短时候选计划；它没有最终客户端订单 ID，不能直接提交。
 
-The command requires an Agentic account fingerprint enrolled by the read-receipt flow. A
-`hold` creates no plan. Only `buy`/`sell` signals with a registered strategy ID and stable
-event time produce a short-lived schema-v3 candidate under `runtime/mcp/`. It binds the
-account and signal but has no final client order ID and cannot be submitted directly.
+The command supports only the current exchange-Spot prototype `BTCUSDT` and requires
+an enrolled Agentic account fingerprint plus a strictly verified account snapshot no
+older than 15 seconds; manually entered positions are no longer accepted. An expired
+snapshot, position drift during evaluation, or `hold` produces no plan. A valid
+`buy`/`sell` produces a short-lived schema-v3 candidate under `runtime/mcp/`; it has
+no final client order ID and cannot be submitted directly.
+
+不可交易的 BTC 零碎余额仍保留在账户回执和成本账本中，但不算作策略可交易持仓；SELL 候选只允许留下经交易规则确认的不可交易余量。<br>
+Untradable BTC dust remains in the account receipt and cost ledger, but is excluded from the strategy's tradable position. A SELL candidate may leave only residue verified as untradable by exchange rules.
 
 详细流程请参阅 [Agent OS MCP 双执行通道说明](docs/AGENT_OS_MCP.md)。<br>
 See [Agent OS MCP dual-execution guide](docs/AGENT_OS_MCP.md) for the complete workflow.
@@ -267,13 +275,17 @@ See [Agent OS MCP dual-execution guide](docs/AGENT_OS_MCP.md) for the complete w
 
 ```powershell
 bstock-spot-observe --symbol BTCUSDT `
-  --verified-snapshot runtime\desktop\mcp\btcusdt-verified-snapshot.json `
+  --verified-snapshot runtime\mcp\latest-verified-snapshot.json `
   --binding-file runtime\desktop\mcp\account-binding.json
 ```
 
 该命令持续读取公开K线，使用统一MTF策略和本地已验证持仓视图，并持久化闭合K线去重状态。输出固定为`OBSERVE_ONLY`、`execution_eligible=false`和`transport=null`；它不调用MCP、不创建票据、不下单。完整边界见[交易所Spot观察说明](docs/EXCHANGE_SPOT_OBSERVER.md)。
 
 This command continuously reads public candles, uses the unified MTF strategy plus the locally verified position view, and persists closed-bar deduplication. Output is always `OBSERVE_ONLY`, `execution_eligible=false`, and `transport=null`; it never calls MCP, creates a ticket, or submits an order. See the [Exchange Spot observer guide](docs/EXCHANGE_SPOT_OBSERVER.md).
+
+现有 Codex 宿主完成七项只读刷新后，可把脱敏JSON通过标准输入交给 `bstock-mcp-host-cycle --request <读取请求路径>`，在一个进程中严格导入回执并运行公开K线策略周期；已导入的回执也可由 `bstock-mcp-cycle --verified-snapshot <回执路径>` 单独处理。15秒新鲜度和既有账户绑定不放宽；两者最多写一个候选文件，不执行真实订单。/ After the seven Codex-hosted reads, pass sanitized JSON on stdin to `bstock-mcp-host-cycle --request <request path>` for strict import and one public-candle strategy cycle in a single process. An already-imported receipt can still use `bstock-mcp-cycle --verified-snapshot <receipt path>`. The 15-second freshness and existing-account binding are unchanged; neither command submits an order.
+
+观察器不会用过期账户快照生成可执行动作，也不会把该 K 线标记为已处理。桌面“演练累计亏损”不进入真实票据；真实票据需要操作者明确确认的权益基线，并由新鲜 MCP 回执自动计算会话累计亏损，无法解释的转账或余额变化会失败关闭。/ The observer never promotes a stale-account signal to an actionable order or consumes that candle. Rehearsal loss does not enter a live ticket; live tickets require an operator-confirmed equity baseline and fresh MCP receipts to calculate cumulative session loss, with unexplained balance changes failing closed.
 
 ### 下载、聚合并回放历史数据 / Download, Aggregate and Replay History
 

@@ -90,23 +90,30 @@ class SpotSignalObserver:
         if duplicate:
             signal = replace(signal, action="hold",
                              reason="signal_bar_already_processed")
-        elif signal.signal_bar_time:
+        elif signal.signal_bar_time and (position_observed_at is None or
+                self._position_fresh(snapshot.observed_at,
+                                     position_observed_at)):
             self.last_signal_bar = signal.signal_bar_time
             self._persist()
         return self._write_event(
             asset.spot_symbol, signal, snapshot.observed_at,
             duplicate=duplicate, position_observed_at=position_observed_at)
 
+    @staticmethod
+    def _position_fresh(observed: datetime, position_observed_at: str) -> bool:
+        position_time = datetime.fromisoformat(
+            position_observed_at.replace("Z", "+00:00"))
+        if position_time.tzinfo is None:
+            raise ValueError("Position snapshot requires timezone")
+        return 0 <= (observed - position_time).total_seconds() <= 15
+
     def _write_event(self, symbol: str, signal: SignalDecision,
                      observed: datetime, *, duplicate: bool,
                      position_observed_at: str | None) -> dict:
         position_fresh = None
         if position_observed_at is not None:
-            position_time = datetime.fromisoformat(
-                position_observed_at.replace("Z", "+00:00"))
-            if position_time.tzinfo is None:
-                raise ValueError("Position snapshot requires timezone")
-            position_fresh = 0 <= (observed - position_time).total_seconds() <= 15
+            position_fresh = self._position_fresh(
+                observed, position_observed_at)
         payload = {
             "schema_version": "1.0",
             "mode": "OBSERVE_ONLY",
@@ -120,9 +127,31 @@ class SpotSignalObserver:
             "signal": asdict(signal),
         }
         _atomic_json(self.config.output_path, payload)
-        if not duplicate and signal.action in {"buy", "sell"}:
+        if position_fresh is not True:
+            suppressed = dict(payload)
+            suppressed["signal"] = dict(payload["signal"], action="hold",
+                                        reason="position_snapshot_not_fresh")
+            _atomic_json(self.config.action_output_path, suppressed)
+        elif not duplicate and signal.action in {"buy", "sell"}:
             _atomic_json(self.config.action_output_path, payload)
         return payload
+
+    def invalidate_action_output(self, reason: str) -> None:
+        """Replace a previous action when account evidence cannot be loaded."""
+        if reason != "position_snapshot_unavailable":
+            raise ValueError("Invalid action invalidation reason")
+        signal = SignalDecision("hold", reason, None, None,
+                                strategy_id="mtf",
+                                strategy_params=asdict(self.config.strategy))
+        _atomic_json(self.config.action_output_path, {
+            "schema_version": "1.0", "mode": "OBSERVE_ONLY",
+            "transport": None, "execution_eligible": False,
+            "symbol": self.symbol,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "position_snapshot_observed_at": None,
+            "position_snapshot_fresh": False,
+            "duplicate_bar": False, "signal": asdict(signal),
+        })
 
     def _persist(self):
         _atomic_json(self.config.state_path, {
@@ -157,9 +186,7 @@ def _position_from_verified(snapshot_path: Path, binding_path: Path,
     receipt = load_verified_receipt(snapshot_path, binding)
     if receipt.symbol != symbol:
         raise ValueError("Verified account snapshot symbol mismatch")
-    summary = receipt.summary()
-    quantity = Decimal(summary["positionQuantity"])
-    cost = Decimal(summary["positionCost"])
+    quantity, cost = receipt.tradable_position()
     entry = cost / quantity if quantity > 0 and cost > 0 else Decimal("0")
     return PositionView(float(quantity), float(entry)), receipt.observed_at
 
@@ -185,28 +212,31 @@ def main() -> int:
     symbol = args.symbol.strip().upper()
     if args.poll_seconds <= 0:
         parser.error("--poll-seconds must be positive")
-    if args.verified_snapshot:
-        position, receipt_time = _position_from_verified(
-            args.verified_snapshot, args.binding_file, symbol)
-    else:
+    if not args.verified_snapshot:
         quantity, entry = (Decimal(args.position_quantity),
                            Decimal(args.entry_price))
         if (not quantity.is_finite() or not entry.is_finite()
                 or quantity < 0 or entry < 0
                 or (quantity == 0) != (entry == 0)):
             parser.error("invalid position")
-        position, receipt_time = PositionView(float(quantity), float(entry)), None
+        static_position = PositionView(float(quantity), float(entry))
     observer = SpotSignalObserver(SpotObserverConfig(
         symbol=symbol, state_path=args.state_file, output_path=args.output,
         action_output_path=args.action_output))
     while True:
         try:
+            if args.verified_snapshot:
+                position, receipt_time = _position_from_verified(
+                    args.verified_snapshot, args.binding_file, symbol)
+            else:
+                position, receipt_time = static_position, None
             payload = observer.evaluate_once(
                 position, position_observed_at=receipt_time)
             print(json.dumps(payload, ensure_ascii=False), flush=True)
         except KeyboardInterrupt:
             return 130
         except Exception as exc:
+            observer.invalidate_action_output("position_snapshot_unavailable")
             print(json.dumps({"success": False, "error": str(exc)},
                              ensure_ascii=False), flush=True)
             if args.once:

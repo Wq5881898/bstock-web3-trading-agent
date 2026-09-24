@@ -95,6 +95,29 @@ def test_enrolled_account_must_match_exact_fingerprint():
             now=NOW + timedelta(seconds=20))
 
 
+def test_complete_spot_rules_retain_raw_balance_and_identify_dust():
+    pinned = binding("2" * 64)
+    req = request(pinned)
+    value = payload(req)
+    info = value["tool_results"]["spot.exchangeInfo"]["symbols"][0]
+    info.update(quoteOrderQtyMarketAllowed=True, orderTypes=["MARKET"],
+        filters=[
+            {"filterType":"LOT_SIZE", "minQty":"0.00001000",
+             "maxQty":"9000", "stepSize":"0.00001000"},
+            {"filterType":"MARKET_LOT_SIZE", "minQty":"0",
+             "maxQty":"113", "stepSize":"0"},
+            {"filterType":"NOTIONAL", "minNotional":"5",
+             "applyMinToMarket":True, "applyMaxToMarket":False},
+        ])
+    verified = verify_spot_host_receipt(req, pinned, value,
+        now=NOW + timedelta(seconds=20))
+    evidence = verified.to_evidence(risk_day="2026-09-21",
+        risk=LocalRiskMetrics(Decimal("0")))
+    assert evidence.position_quantity == Decimal("0.00023976")
+    assert evidence.dust_quantity == Decimal("0.00000976")
+    assert verified.tradable_position()[0] == Decimal("0.00023")
+
+
 @pytest.mark.parametrize("change,match", [
     (("request_id", "other"), "match"),
     (("symbol", "ETHUSDT"), "match"),
