@@ -2,6 +2,16 @@
 
 > 2026-09-24。此处的“收口”仅指当前仓库的对话式 MCP 助手、离线安全资产与 Alpha2 移交完成；**不代表原定持续自动实盘目标完成**。/ This milestone closes the conversational MCP assistant and offline safety-asset handoff, not the original continuous live-trading objective.
 
+## 为什么降级 / Why the scope was reduced
+
+原定产品是“一次启动、持续监控行情与策略、按风控产生信号、经 MCP 逐笔确认并完成真实买卖与恢复”。当前代码实现了其中的策略、候选、风控和故障恢复的离线或单次环节，却没有把观察器、新鲜账户读取、确认、下单、成交对账和下一轮运行接成持续闭环。现有非交互 Codex 宿主对通用 `tool_execute` 的审批边界也未解决：该入口既能转发读取也能转发写入，不能为自动读取而无条件授权。**这不是“只差一次配置”或“测试已通过即可自动交易”。**
+
+因此本项目未达到原始主目标，是一次明确的范围降级，而不是把原目标改名为已完成。对话式下单本身主要依靠已有 MCP 及账户授权，本仓库对这种一次性操作的增量有限；投入最多、可复用价值更高的资产是 K 线/策略信号、风险、成交账本和订单恢复契约，已经形成面向 Alpha2 的移交材料。用户已告知 Alpha2 的代码吸收完成；本仓库未在此文件中替 Alpha2 声称其真实交易验收通过。
+
+The original product was a once-started, continuous market/strategy/risk loop that would confirm each MCP trade and reconcile it before the next cycle. The repository has offline and one-shot components, but has not connected observation, fresh private reads, confirmation, execution, reconciliation, and continuation into one durable loop. The non-interactive Codex host's generic `tool_execute` approval boundary is unresolved: it can forward both reads and writes, so blanket approval is not a safe shortcut. This is a substantive shortfall, not a configuration-only issue.
+
+The project therefore missed its original primary objective and explicitly reduced scope. Conversational one-off trading relies largely on the existing MCP authorization, so this repository adds comparatively little to that particular workflow. Its more substantial reusable work is market/strategy signals, risk, fill accounting, and order-recovery contracts, documented for Alpha2. The operator reports that Alpha2 has absorbed code; that report is not a claim that Alpha2 has passed live-trading acceptance.
+
 ## 已交付 / Delivered
 
 - 现有 Codex MCP 宿主和既有 Agentic 子账户的人工逐笔交互路径；本项目不保存 OAuth Token 或 API Key，也不自动改用其他交易接口。历史人工确认交易不能记为策略自动成交。

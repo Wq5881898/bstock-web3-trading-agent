@@ -16,9 +16,9 @@
 本项目已经从原研究系统中独立出来，运行时不依赖原系统模块。默认桌面模式为模拟盘，
 不会自动调用 MCP、钱包或执行真实交易。
 
-最终产品目标是：用户一次启动后，程序持续获取行情、运行选定策略和风控、生成真实交易候选，直到用户停止；真实订单只通过现有Codex MCP连接和现有Agentic子账户执行，并按Binance Agentic MCP规则逐笔确认。范围、状态机和验收条件以[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[MCP + Agentic收尾总计划](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)为最高优先级依据。
+**目标调整 / Scope reduction:** 原目标是用户启动一次后，程序持续获取行情、按策略和风控自动产生候选，直到用户停止，并通过现有 Codex MCP 宿主逐笔确认真实交易。这个端到端目标**没有实现**。当前仓库的阶段性交付降级为对话式 MCP 交易辅助、单次只读策略周期和可移交的离线策略/风控/订单恢复资产；不提供持续策略实盘运行器。原[自动交易产品基准](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[收尾总计划](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)保留为历史目标与未通过的验收记录，不再描述当前发布能力。
 
-The final product goal is a once-started session that continuously reads markets, evaluates the selected strategy and risk, and emits real-trade candidates until stopped. Real orders use only the existing Codex MCP connection and existing Agentic sub-account, with per-action confirmation required by Binance Agentic MCP. The [product baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic closeout master plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) are the highest-priority sources.
+The original goal was a once-started, continuously running strategy and risk session with per-order-confirmed execution through the existing Codex MCP host. **That end-to-end goal was not achieved.** This repository's current scope is a conversational MCP trading assistant, a one-shot read-only strategy cycle, and offline strategy/risk/order-recovery assets for reuse. It is not a continuous live strategy runner. The [original product baseline](docs/AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [closeout plan](docs/MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) remain as historical targets and unmet acceptance criteria, not descriptions of shipped capability.
 
 **当前阶段结论 / Current milestone:** 本仓库提供对话式 MCP 交易交接、离线策略/风控/恢复契约及只读单次策略周期；并未完成持续唤醒 MCP 宿主、策略自动真实 BUY/SELL 或 24 小时监督验收。相关安全资产已整理供 Alpha2 吸收，详见[阶段收口记录](docs/STAGE_CLOSEOUT_20260924.md)。/ The repository provides conversational MCP handoff, offline strategy/risk/recovery contracts, and a read-only one-shot strategy cycle. Continuous MCP-host orchestration, strategy-driven live BUY/SELL, and 24-hour supervised acceptance remain unimplemented; see the [milestone closeout](docs/STAGE_CLOSEOUT_20260924.md).
 

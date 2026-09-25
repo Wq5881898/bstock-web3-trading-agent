@@ -1,7 +1,9 @@
 # MCP + Agentic 自动交易收尾总计划
 # MCP + Agentic Trading Closeout Master Plan
 
-> 状态 / Status: **已由用户确认；后续工作必须严格按阶段和验收编号执行。 / Approved by the operator; remaining work must follow the phases and acceptance IDs below.**
+> **历史计划，未完成 / Historical plan, incomplete.** 2026-09-25 已决定将本仓库当前发布范围降级为对话式 MCP 辅助及安全资产移交；原持续策略实盘 Phase 4 未通过。实际交付与差距见 [README](../README.md) 和[阶段收口记录](STAGE_CLOSEOUT_20260924.md)。以下阶段与验收 ID 作为历史目标保留，不代表仍在本仓库执行或已经完成。/ The current release scope was reduced; Phase 4 remains unmet, and the phases below are historical acceptance criteria, not current delivery claims.
+>
+> 状态 / Status: **原计划曾获用户确认，现已停止按该计划推进；若恢复须重新决策。 / Originally approved, now inactive; resumption requires a new decision.**
 >
 > 适用日期 / Effective draft date: 2026-09-22
 

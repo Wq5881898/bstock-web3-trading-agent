@@ -1,8 +1,10 @@
 # 自动交易产品基准 / Autonomous Trading Product Baseline
 
-> 本文档与[收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)共同构成最高优先级产品依据。下级文档或代码冲突时必须先纠正，不能自行改变账户、认证或执行接口。
+> **历史目标，未交付 / Historical target, not delivered.** 2026-09-25 阶段性范围已降级，当前发布状态以 [README](../README.md) 和[阶段收口记录](STAGE_CLOSEOUT_20260924.md)为准。以下仍保存原始验收目标，不能据此声称持续自动实盘已实现。/ The current release scope has been reduced; this document preserves the original acceptance target, not shipped capability.
 >
-> This document and the [closeout master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) are the highest-priority product sources. Conflicts must be corrected before implementation; account, authentication, and execution transports cannot be changed by inference.
+> 原实施期间，本文档与[收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)共同构成最高优先级产品依据。后续如恢复原目标，仍不能自行改变账户、认证或执行接口，须重新取得明确决策。
+>
+> During the original implementation, this document and the [closeout master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md) were the primary product sources. Resuming that goal or changing account, authentication, or transport requires a new explicit decision.
 
 ## 唯一主目标 / Single primary objective
 
