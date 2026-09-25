@@ -1,8 +1,10 @@
-# 当前收尾状态 / Current Closeout Status
+# 历史收尾状态 / Historical Closeout Status
 
-收尾范围服从[自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[MCP + Agentic 收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)。当前唯一真实交易主链是：现有 Codex Binance MCP 宿主 → 现有 Agentic 子账户。每个真实非只读动作按照 Binance Agentic MCP 规则逐笔确认。
+> 本页记录 2026-09-22 前后的阶段性状态，**不是当前发布验收结论**。原持续策略实盘目标已降级且未交付；以[阶段收口记录](STAGE_CLOSEOUT_20260924.md)和 [README](../README.md) 为准。 / Historical snapshot only; the continuous live-strategy goal remains unmet. See the milestone closeout and README for current scope.
 
-Closeout follows the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md). The only real-trading path is the existing Codex Binance MCP host to the existing Agentic sub-account. Every real non-read action is confirmed individually under the Binance Agentic MCP contract.
+原收尾范围服从[自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)和[MCP + Agentic 收尾总计划](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md)。已验证的人工交易路径是：现有 Codex Binance MCP 宿主 → 现有 Agentic 子账户。每个真实非只读动作仍须逐笔确认。
+
+The original closeout followed the [product baseline](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md) and [MCP + Agentic master plan](MCP_AGENTIC_CLOSEOUT_MASTER_PLAN.md). The verified manual-trading path used the existing Codex Binance MCP host and Agentic sub-account; every real non-read action still requires individual confirmation.
 
 ## 已完成 / Delivered
 

@@ -1,6 +1,6 @@
 # 对话式交易助手收尾 / Conversational Trading Assistant Closeout
 
-> 状态 / Status: **对话式助手阶段性收尾完成**：文档、项目 Skill、正式校验、干净检出全套测试、Wheel 安装导入、公开只读 MCP 冒烟和有限敏感信息扫描已通过；**尚未宣称新任务 Skill 行为验收或新的真实订单验收**。此里程碑不替代[持续自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)，也不批准更换账户、OAuth、MCP 或 API 路线。 / **Conversational-assistant milestone closed** for documentation, repository Skill, formal validation, clean-checkout tests, wheel install/import, public read-only MCP smoke and a limited secret scan. Fresh-task Skill behavior and new live-order acceptance are **not** claimed. This does not replace the autonomous-trading baseline or approve a transport/account change.
+> 状态 / Status: **对话式助手阶段性收尾完成**：文档、项目 Skill、正式校验、干净检出全套测试、Wheel 安装导入、公开只读 MCP 冒烟和有限敏感信息扫描已通过；**尚未宣称新任务 Skill 行为验收或新的真实订单验收**。原[持续自动交易产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)现为未交付的历史目标，当前范围见[阶段收口记录](STAGE_CLOSEOUT_20260924.md)。此里程碑不批准更换账户、OAuth、MCP 或 API 路线。 / **Conversational-assistant milestone closed** for documentation, repository Skill, formal validation, clean-checkout tests, wheel install/import, public read-only MCP smoke and a limited secret scan. Fresh-task Skill behavior and new live-order acceptance are **not** claimed. The autonomous-trading baseline is now an unmet historical target; the milestone closeout defines current scope and does not approve a transport/account change.
 
 ## 1. 要交付的能力 / Intended capability
 
@@ -41,12 +41,12 @@ This is a user-initiated, per-action-confirmed assistant, not a continuously una
 
 原工作区另有未提交改动，先前的 **505 项测试通过**只代表该较新的本地树，不能归给已公开提交。 / The original worktree has separate uncommitted changes; its earlier **505 passing tests** describe that newer local tree and must not be attributed to the public commit.
 
-本阶段不再为了“收尾”重复下真实订单。下次真正使用时，仍需在新的项目任务中确认 `$binance-spot-assistant` 被发现，并用不下单预演检验缺参、拒绝、过期和 UNKNOWN 等行为；这属于首次使用前的行为验收，不能凭文件存在推定已经通过，也无需为此重建账户或重新授权。持续无人值守策略交易则仍按产品基准单独推进。 / No additional live order is needed to close this stage. At first use in a fresh project task, confirm Skill discovery and rehearse missing-input, refusal, expiry and UNKNOWN behavior without an order. File presence alone does not prove activation, and no new account or OAuth grant is implied. Unattended strategy execution remains a separate product-baseline task.
+本阶段不再为了“收尾”重复下真实订单。下次真正使用时，仍需在新的项目任务中确认 `$binance-spot-assistant` 被发现，并用不下单预演检验缺参、拒绝、过期和 UNKNOWN 等行为；这属于首次使用前的行为验收，不能凭文件存在推定已经通过，也无需为此重建账户或重新授权。原持续策略实盘目标已停止按本仓库计划推进，恢复须另行决策。 / No additional live order is needed to close this stage. At first use in a fresh project task, confirm Skill discovery and rehearse missing-input, refusal, expiry and UNKNOWN behavior without an order. File presence alone does not prove activation, and no new account or OAuth grant is implied. Resuming the original continuous live-strategy goal requires a separate decision.
 
 同日，现有 `binance-agent-os` MCP 的工具发现和 `spot.tickerPrice(symbol=BTCUSDT)` 公开只读调用成功；没有读取私有余额，也没有调用 `spot.newOrder` 或任何其他写工具。对“用 50 USDT 市价买 BTC”的无下单演练仅确认意图应为 Agentic Spot `BTCUSDT`、`BUY MARKET`、`quoteOrderQty=50 USDT`，且在真实账户预检和该笔确认前不得下单；这不是实际账户预检。 / On the same date, discovery and a public `spot.tickerPrice(BTCUSDT)` read through the existing MCP succeeded. No private balance or write tool was called. The no-order 50-USDT example checked intent mapping only, not private-account preflight.
 
 ## 5. 不在本里程碑 / Out of scope
 
-24 小时策略运行、策略自动 BUY/SELL、无人确认真实下单、自建 MCP OAuth、API Key、Futures、链上钱包、Telegram、多币种和新闻驱动交易。它们分别属于[持续产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)、另行批准的接口决策或未来功能。/ Continuous strategy execution, zero-confirmation orders, new OAuth/API credentials, futures, on-chain wallet, Telegram, multi-asset and news-driven trading remain separate.
+24 小时策略运行、策略自动 BUY/SELL、无人确认真实下单、自建 MCP OAuth、API Key、Futures、链上钱包、Telegram、多币种和新闻驱动交易均未随本阶段交付。原[持续产品基准](AUTONOMOUS_TRADING_PRODUCT_BASELINE.md)仅作历史目标保留；任何重启或改走其他接口都须另行决策。/ Continuous strategy execution, zero-confirmation orders, new OAuth/API credentials, futures, on-chain wallet, Telegram, multi-asset and news-driven trading were not delivered in this milestone. The original baseline is historical; resumption or a transport change requires a separate decision.
 
 官方确认边界 / Official confirmation boundary: <https://developers.binance.com/en/docs/agent-native/mcp-server/agentic>.

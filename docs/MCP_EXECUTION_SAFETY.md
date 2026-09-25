@@ -1,5 +1,7 @@
 # MCP账户核对与幂等执行 / MCP reconciliation and idempotent execution
 
+> 此页说明**离线安全契约**，不是持续实盘或无人确认授权。`UNATTENDED` 是旧版通用枚举值，不是当前 MCP 产品模式；日志使用原子文件替换但未显式 `fsync`，不能据此声称已证明断电持久性。/ This is an offline contract, not live or unattended authorization. The legacy `UNATTENDED` enum is not an MCP product mode; atomic file replacement alone does not prove power-loss durability.
+
 ## 这一阶段交付了什么 / What this phase delivers
 
 `execution_safety.py`补上了自动风控闸门和未来MCP执行宿主之间的离线安全契约。它本身没有MCP客户端、OAuth Token、`tools/call`或下单方法，不会访问账户或发送订单。
@@ -9,20 +11,20 @@
 当前交付包括：
 
 - MCP宿主核对证据：账户权限、余额、未决订单、成交记录四项读取必须全部完成；
-- 默认`OBSERVE_ONLY`，只有明确绑定Agentic子账户、标的、产品和到期时间的`UNATTENDED`授权才能准备执行；
-- 策略事件键、风险日、交易意图和精确下单量共同生成稳定指纹；
+- 默认`OBSERVE_ONLY`；旧版`UNATTENDED`仅为通用离线契约兼容值，MCP写入仍须逐笔确认；
+- 当前策略事件键、风险日、参考价、交易意图和精确下单量共同生成指纹；重新报价或跨日可能改变身份，不应直接复制为生产级去重键；
 - 确定性`client_order_id`，同一策略事件只能准备一次；
-- 强制落盘的原子JSON执行日志、启动自动恢复和严格状态迁移；
+- 原子替换的JSON执行日志、启动恢复和严格状态迁移；未显式`fsync`，仍需断电故障验证；
 - 系统级跨进程执行锁，同一账户状态只能由一个执行实例持有；
 - 网络超时等不确定结果进入`UNKNOWN`，只能查单核对，禁止自动再次提交。
 
 The delivery includes:
 
 - MCP-host evidence requiring successful account, balance, open-order and fill reads;
-- `OBSERVE_ONLY` by default, with preparation allowed only by an expiring `UNATTENDED` arming bound to the Agentic account, symbol and product;
-- a stable fingerprint covering the strategy event, risk day, intent and exact order amount;
+- `OBSERVE_ONLY` by default; legacy `UNATTENDED` is an offline compatibility value, while MCP writes still require per-action confirmation;
+- a fingerprint currently including the strategy event, risk day, reference price, intent and amount; re-quoting or crossing a day may change it, so this is not a production deduplication key to copy unchanged;
 - a deterministic `client_order_id`, allowing one preparation per strategy event;
-- a mandatory durable atomic JSON execution journal, automatic startup restore and strict phase transitions;
+- an atomic-replacement JSON journal, startup restore and strict phase transitions; explicit `fsync` and power-loss validation are still absent;
 - an OS-level cross-process execution lock, allowing one owner for an account state;
 - `UNKNOWN` after an uncertain result: reconcile by read-only order lookup and never resubmit automatically.
 
